@@ -1,3 +1,5 @@
 scoreboard.config.json
+.env
+.env.*
 __pycache__/
 .DS_Store
