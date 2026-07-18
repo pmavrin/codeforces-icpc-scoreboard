@@ -19,19 +19,37 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("SCOREBOARD_CONFIG", ROOT / "scoreboard.config.json"))
 INDEX_PATH = ROOT / "index.html"
+ENV_CONFIG = {
+    "api_key": "CODEFORCES_API_KEY",
+    "api_secret": "CODEFORCES_API_SECRET",
+    "contest_id": "CODEFORCES_CONTEST_ID",
+    "group_code": "CODEFORCES_GROUP_CODE",
+}
 
 
 def load_config() -> dict[str, Any]:
-    try:
+    config: dict[str, Any] = {}
+    if CONFIG_PATH.exists():
         config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except FileNotFoundError as error:
-        raise RuntimeError(
-            f"Missing {CONFIG_PATH.name}. Copy scoreboard.config.example.json and add your credentials."
-        ) from error
+
+    for key, environment_name in ENV_CONFIG.items():
+        value = os.environ.get(environment_name)
+        if value:
+            config[key] = value
+
+    if os.environ.get("HOST"):
+        config["host"] = os.environ["HOST"]
+    if os.environ.get("PORT"):
+        config["port"] = os.environ["PORT"]
+
     required = ("api_key", "api_secret", "contest_id", "group_code")
     missing = [key for key in required if not config.get(key)]
     if missing:
-        raise RuntimeError(f"Missing config values: {', '.join(missing)}")
+        environment_names = ", ".join(ENV_CONFIG[key] for key in missing)
+        raise RuntimeError(
+            f"Missing config values: {', '.join(missing)}. "
+            f"Set {environment_names} or configure {CONFIG_PATH.name}."
+        )
     return config
 
 
@@ -69,6 +87,14 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         request = urllib.parse.urlparse(self.path)
+        if request.path == "/health":
+            try:
+                load_config()
+            except (RuntimeError, json.JSONDecodeError) as error:
+                self.send_json(503, {"status": "FAILED", "comment": str(error)})
+                return
+            self.send_json(200, {"status": "OK"})
+            return
         if request.path in ("/", "/index.html"):
             try:
                 config = load_config()
