@@ -1,0 +1,8 @@
+{
+  "api_key": "your-codeforces-api-key",
+  "api_secret": "your-codeforces-api-secret",
+  "contest_id": 620457,
+  "group_code": "NLXJakpbHN",
+  "host": "0.0.0.0",
+  "port": 8080
+}

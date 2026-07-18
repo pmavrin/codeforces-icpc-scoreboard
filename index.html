@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08111f">
+  <title>ICPC Live Scoreboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070d18;
+      --surface: #0d1727;
+      --surface-raised: #121f33;
+      --line: rgba(184, 206, 235, .14);
+      --muted: #8fa1b9;
+      --text: #f4f7fb;
+      --blue: #5da9ff;
+      --blue-soft: rgba(93, 169, 255, .15);
+      --green: #41d693;
+      --green-deep: #117653;
+      --red: #ff6b70;
+      --red-soft: rgba(255, 107, 112, .13);
+      --amber: #ffca68;
+      --header-height: 10.7rem;
+      --table-head-height: 5.1rem;
+      --row-height: 4.65rem;
+      --problem-size: 5.35rem;
+      --rank-size: 5.5rem;
+      --solved-size: 7.1rem;
+      --penalty-size: 8.3rem;
+      --team-size: 25rem;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: geometricPrecision;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-width: 900px;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      content: "";
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 14% -10%, rgba(54, 119, 202, .17), transparent 32rem),
+        linear-gradient(115deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: auto, 3.5rem 3.5rem;
+    }
+
+    button, input { font: inherit; }
+
+    button {
+      border: 0;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    button:focus-visible, input:focus-visible {
+      outline: 3px solid var(--blue);
+      outline-offset: 3px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: var(--header-height) minmax(0, 1fr) 2.5rem;
+      height: 100vh;
+      min-height: 600px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(24rem, 1fr) auto auto;
+      align-items: center;
+      gap: 2.5rem;
+      padding: 1.6rem 2.3rem 1.35rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 13, 24, .86);
+      backdrop-filter: blur(20px);
+    }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 4.35rem minmax(0, 1fr);
+      align-items: center;
+      gap: 1.25rem;
+      min-width: 0;
+    }
+
+    .mark {
+      position: relative;
+      display: grid;
+      width: 4.35rem;
+      height: 4.35rem;
+      place-items: center;
+      overflow: hidden;
+      border: 1px solid rgba(93, 169, 255, .32);
+      border-radius: 1.15rem;
+      background: var(--blue-soft);
+      box-shadow: 0 0 2.8rem rgba(28, 123, 238, .14);
+    }
+
+    .mark svg { width: 2.7rem; height: 2.7rem; }
+
+    .eyebrow {
+      margin-bottom: .35rem;
+      color: var(--blue);
+      font-size: .88rem;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: white;
+      font-size: clamp(1.55rem, 2.05vw, 2.55rem);
+      font-weight: 790;
+      letter-spacing: -.04em;
+      line-height: 1.06;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .contest-meta {
+      display: flex;
+      align-items: center;
+      gap: .72rem;
+      margin-top: .55rem;
+      color: var(--muted);
+      font-size: .92rem;
+      font-weight: 650;
+    }
+
+    .dot { color: #53647b; }
+
+    .phase-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .48rem;
+      padding: .44rem .76rem;
+      border: 1px solid rgba(65, 214, 147, .23);
+      border-radius: 999px;
+      color: #74e6b2;
+      background: rgba(65, 214, 147, .09);
+      font-size: .83rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .phase-pill::before {
+      width: .5rem;
+      height: .5rem;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+      box-shadow: 0 0 0 .3rem rgba(65, 214, 147, .11);
+    }
+
+    .phase-pill.finished {
+      border-color: rgba(143, 161, 185, .23);
+      color: #b4c0cf;
+      background: rgba(143, 161, 185, .09);
+    }
+
+    .phase-pill.pending {
+      border-color: rgba(255, 202, 104, .23);
+      color: var(--amber);
+      background: rgba(255, 202, 104, .09);
+    }
+
+    .timer-block {
+      width: clamp(13rem, 16vw, 18rem);
+      text-align: center;
+    }
+
+    .timer-label {
+      margin-bottom: .3rem;
+      color: var(--muted);
+      font-size: .77rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .timer {
+      color: white;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(2.9rem, 4vw, 4.6rem);
+      font-weight: 760;
+      letter-spacing: -.045em;
+      line-height: 1;
+    }
+
+    .right-status {
+      display: flex;
+      align-items: center;
+      gap: 1.1rem;
+    }
+
+    .icon-button {
+      display: grid;
+      width: 3.15rem;
+      height: 3.15rem;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: .88rem;
+      background: var(--surface);
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+
+    .icon-button:hover {
+      border-color: rgba(93, 169, 255, .48);
+      background: var(--surface-raised);
+      transform: translateY(-1px);
+    }
+
+    .icon-button svg { width: 1.35rem; height: 1.35rem; }
+
+    main {
+      min-height: 0;
+      padding: 1rem 1.5rem .55rem;
+    }
+
+    .scoreboard {
+      height: 100%;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 1.1rem;
+      background: rgba(12, 22, 37, .86);
+      box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .23);
+    }
+
+    .score-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+    }
+
+    th, td {
+      overflow: hidden;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    th:last-child, td:last-child { border-right: 0; }
+
+    thead th {
+      height: var(--table-head-height);
+      padding: .65rem .35rem;
+      color: #91a3ba;
+      background: #101c2e;
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .095em;
+      text-transform: uppercase;
+    }
+
+    thead th:first-child { border-radius: 1rem 0 0; }
+    thead th:last-child { border-radius: 0 1rem 0 0; }
+
+    .rank-col { width: var(--rank-size); }
+    th.rank-col, td.rank-col { text-overflow: clip; }
+    .team-col { width: var(--team-size); min-width: 0; text-align: left; }
+    .solved-col { width: var(--solved-size); }
+    .penalty-col { width: var(--penalty-size); }
+    .problem-col { width: var(--problem-size); }
+
+    .th-primary {
+      display: block;
+      margin-bottom: .18rem;
+      color: #eef4fb;
+      font-size: 1.25rem;
+      letter-spacing: 0;
+    }
+
+    .th-sub {
+      color: #71849c;
+      font-size: .65rem;
+      letter-spacing: .07em;
+    }
+
+    tbody tr {
+      height: var(--row-height);
+      background: rgba(255, 255, 255, .009);
+    }
+
+    tbody tr:nth-child(even) { background: rgba(255, 255, 255, .028); }
+
+    tbody tr.is-new {
+      animation: reveal .55s cubic-bezier(.2,.75,.25,1) both;
+      animation-delay: calc(var(--row-index) * 35ms);
+    }
+
+    tbody tr.rank-up .rank-number::after,
+    tbody tr.rank-down .rank-number::after {
+      margin-left: .38rem;
+      color: var(--green);
+      font-size: .68em;
+      content: "▲";
+      vertical-align: .1em;
+    }
+
+    tbody tr.rank-down .rank-number::after { color: var(--red); content: "▼"; }
+
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(.45rem); }
+      to { opacity: 1; transform: none; }
+    }
+
+    tbody td { height: var(--row-height); padding: .4rem .45rem; }
+
+    .rank-number {
+      color: #c8d3e1;
+      font-variant-numeric: tabular-nums;
+      font-size: 1.55rem;
+      font-weight: 790;
+      letter-spacing: -.04em;
+    }
+
+    .medal {
+      display: inline-grid;
+      width: 2.8rem;
+      height: 2.8rem;
+      place-items: center;
+      border: 1px solid rgba(255, 202, 104, .36);
+      border-radius: .82rem;
+      color: #17120a;
+      background: linear-gradient(145deg, #ffe49a, #e8a833);
+      font-size: 1.3rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 .35rem 1rem rgba(226,160,35,.1);
+    }
+
+    .medal.silver {
+      border-color: rgba(213, 224, 237, .35);
+      color: #18202a;
+      background: linear-gradient(145deg, #f2f6fa, #9aaabd);
+    }
+
+    .medal.bronze {
+      border-color: rgba(214, 145, 102, .35);
+      color: #21130d;
+      background: linear-gradient(145deg, #e8ac84, #a45a31);
+    }
+
+    .team-cell { padding-left: 1.25rem; text-align: left; }
+
+    .team-name {
+      overflow: hidden;
+      color: #f7f9fc;
+      font-size: clamp(1.18rem, 1.47vw, 1.75rem);
+      font-weight: 735;
+      letter-spacing: -.025em;
+      line-height: 1.12;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .team-members {
+      margin-top: .35rem;
+      overflow: hidden;
+      color: #8193aa;
+      font-size: clamp(.76rem, .84vw, .98rem);
+      font-weight: 620;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .score-main {
+      color: #f7fafc;
+      font-variant-numeric: tabular-nums;
+      font-size: 1.88rem;
+      font-weight: 800;
+      letter-spacing: -.045em;
+    }
+
+    .penalty-main {
+      color: #b7c4d4;
+      font-variant-numeric: tabular-nums;
+      font-size: 1.38rem;
+      font-weight: 720;
+      letter-spacing: -.025em;
+    }
+
+    .problem-cell {
+      position: relative;
+      padding: .4rem .25rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .problem-result {
+      display: grid;
+      width: 100%;
+      min-height: min(3.55rem, calc(var(--row-height) - .8rem));
+      place-content: center;
+      border: 1px solid transparent;
+      border-radius: .72rem;
+      line-height: 1;
+    }
+
+    .problem-result.solved {
+      border-color: rgba(65, 214, 147, .27);
+      color: #d9ffef;
+      background: linear-gradient(145deg, rgba(25, 154, 104, .72), rgba(17, 118, 83, .78));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
+    }
+
+    .problem-result.failed {
+      border-color: rgba(255, 107, 112, .18);
+      color: #ff8e92;
+      background: var(--red-soft);
+    }
+
+    .problem-result.empty { color: #4e6076; }
+
+    .problem-score {
+      font-size: 1.05rem;
+      font-weight: 820;
+    }
+
+    .problem-time {
+      margin-top: .28rem;
+      font-size: .68rem;
+      font-weight: 710;
+      opacity: .78;
+    }
+
+    .scoreboard.compact-problems .problem-cell { padding-inline: .18rem; }
+    .scoreboard.compact-problems .problem-result { border-radius: .58rem; }
+    .scoreboard.compact-problems .problem-time { font-size: .61rem; }
+    .scoreboard.compact-problems th.problem-col .th-primary { margin-bottom: 0; }
+    .scoreboard.compact-problems th.problem-col .th-sub { display: none; }
+
+    .scoreboard.compact-rows tbody td { padding-block: .25rem; }
+    .scoreboard.compact-rows .team-name {
+      font-size: clamp(1.05rem, 1.25vw, 1.4rem);
+      line-height: 1.02;
+    }
+    .scoreboard.compact-rows .team-members {
+      display: block;
+      margin-top: .08rem;
+      font-size: .72rem;
+      line-height: 1;
+    }
+    .scoreboard.compact-rows .medal {
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: .68rem;
+    }
+    .scoreboard.compact-rows .problem-cell { padding-block: .2rem; }
+    .scoreboard.compact-rows .problem-result {
+      min-height: calc(var(--row-height) - .4rem);
+    }
+
+    .empty-state {
+      display: none;
+      height: calc(100% - var(--table-head-height));
+      place-items: center;
+      color: var(--muted);
+      font-size: 1.35rem;
+      font-weight: 680;
+    }
+
+    .empty-state.visible { display: grid; }
+
+    .footer {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 0 1.9rem;
+      color: #708198;
+      font-size: .76rem;
+      font-weight: 690;
+      letter-spacing: .045em;
+    }
+
+    .sync-status { display: flex; align-items: center; gap: .55rem; }
+
+    .sync-dot {
+      width: .48rem;
+      height: .48rem;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 .24rem rgba(65, 214, 147, .1);
+    }
+
+    .sync-status.loading .sync-dot {
+      animation: pulse 1s ease-in-out infinite;
+      background: var(--blue);
+      box-shadow: 0 0 0 .24rem rgba(93, 169, 255, .1);
+    }
+
+    .sync-status.error .sync-dot {
+      background: var(--red);
+      box-shadow: 0 0 0 .24rem rgba(255, 107, 112, .1);
+    }
+
+    @keyframes pulse { 50% { opacity: .35; transform: scale(.74); } }
+
+    .page-dots { display: flex; align-items: center; gap: .42rem; }
+
+    .page-dot {
+      width: .38rem;
+      height: .38rem;
+      border-radius: 99px;
+      background: #435269;
+      transition: width .2s ease, background .2s ease;
+    }
+
+    .page-dot.active { width: 1.35rem; background: var(--blue); }
+
+    .page-label {
+      color: #aebdd0;
+      font-size: .72rem;
+      font-weight: 780;
+      letter-spacing: .065em;
+      text-transform: uppercase;
+    }
+
+    .provider { justify-self: end; }
+
+    dialog {
+      width: min(35rem, calc(100vw - 3rem));
+      max-height: calc(100vh - 2rem);
+      padding: 0;
+      overflow: auto;
+      border: 1px solid rgba(173, 200, 235, .2);
+      border-radius: 1.35rem;
+      color: var(--text);
+      background: #101b2b;
+      box-shadow: 0 2rem 7rem rgba(0, 0, 0, .55);
+    }
+
+    dialog::backdrop {
+      background: rgba(2, 6, 13, .76);
+      backdrop-filter: blur(9px);
+    }
+
+    .dialog-content { padding: 2rem; }
+
+    .dialog-kicker {
+      color: var(--blue);
+      font-size: .76rem;
+      font-weight: 820;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+
+    dialog h2 {
+      margin: .55rem 0 .7rem;
+      color: white;
+      font-size: 2rem;
+      letter-spacing: -.045em;
+    }
+
+    dialog p { margin: 0 0 1.5rem; color: #9eacc0; line-height: 1.55; }
+
+    label {
+      display: block;
+      margin-bottom: .55rem;
+      color: #c9d4e2;
+      font-size: .85rem;
+      font-weight: 740;
+    }
+
+    input {
+      width: 100%;
+      height: 3.65rem;
+      padding: 0 1rem;
+      border: 1px solid rgba(173, 200, 235, .18);
+      border-radius: .8rem;
+      color: white;
+      background: #0a1422;
+      font-size: 1.1rem;
+    }
+
+    .field-help { margin-top: .55rem; color: #6f8199; font-size: .75rem; }
+
+    .credentials-card {
+      margin-top: 1.2rem;
+      padding: 1rem;
+      border: 1px solid rgba(93, 169, 255, .22);
+      border-radius: .9rem;
+      background: rgba(93, 169, 255, .065);
+    }
+
+    .credentials-card[hidden] { display: none; }
+
+    .credentials-title {
+      margin-bottom: .35rem;
+      color: #dceaff;
+      font-size: .9rem;
+      font-weight: 790;
+    }
+
+    .credentials-copy {
+      margin: 0 0 .9rem;
+      color: #8395ac;
+      font-size: .76rem;
+      line-height: 1.45;
+    }
+
+    .credentials-copy a { color: #8fc3ff; }
+
+    .credentials-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+    }
+
+    .credentials-grid input { height: 3rem; font-size: .9rem; }
+
+    .remember-row {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin: .85rem 0 0;
+      color: #9eacc0;
+      font-size: .78rem;
+      font-weight: 660;
+      cursor: pointer;
+    }
+
+    .remember-row input {
+      width: 1rem;
+      height: 1rem;
+      margin: 0;
+      accent-color: var(--blue);
+    }
+
+    .dialog-actions { display: flex; gap: .8rem; margin-top: 1.65rem; }
+
+    .primary-button, .secondary-button {
+      height: 3.35rem;
+      padding: 0 1.3rem;
+      border-radius: .8rem;
+      font-weight: 780;
+    }
+
+    .primary-button { flex: 1; color: #06101d; background: var(--blue); }
+    .secondary-button { border: 1px solid var(--line); background: #162235; }
+
+    .dialog-error { min-height: 1.2rem; margin-top: .75rem; color: #ff9498; font-size: .82rem; }
+
+    .demo-badge {
+      display: none;
+      padding: .22rem .5rem;
+      border: 1px solid rgba(255, 202, 104, .25);
+      border-radius: .35rem;
+      color: var(--amber);
+      background: rgba(255, 202, 104, .08);
+      font-size: .66rem;
+      font-weight: 850;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .demo-badge.visible { display: inline-block; }
+
+    @media (max-height: 980px) {
+      :root {
+        --header-height: 8.65rem;
+        --table-head-height: 4.3rem;
+        --row-height: 4.25rem;
+      }
+      .topbar { padding-top: 1rem; padding-bottom: .9rem; }
+      .mark { width: 3.7rem; height: 3.7rem; }
+      .brand { grid-template-columns: 3.7rem minmax(0, 1fr); }
+      .team-members { margin-top: .18rem; }
+      .problem-result { min-height: min(3.1rem, calc(var(--row-height) - .8rem)); }
+    }
+
+    @media (max-width: 1200px) {
+      :root { --problem-size: 4.45rem; --penalty-size: 6.6rem; --solved-size: 5.8rem; }
+      .topbar { gap: 1.3rem; }
+      .team-members { display: none; }
+      .team-name { font-size: 1.18rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none">
+            <path d="M12 34V20M24 34V12M36 34V25" stroke="#5DA9FF" stroke-width="5" stroke-linecap="round"/>
+            <path d="M8 38H40" stroke="#DCEBFF" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+          </svg>
+        </div>
+        <div>
+          <div class="eyebrow">ICPC Live Scoreboard</div>
+          <h1 id="contestName">Ready for your contest</h1>
+          <div class="contest-meta">
+            <span id="phasePill" class="phase-pill pending">Setup</span>
+            <span id="contestIdMeta">Codeforces</span>
+            <span class="dot">•</span>
+            <span id="teamCount">0 teams</span>
+            <span id="demoBadge" class="demo-badge">Preview</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="timer-block">
+        <div id="timerLabel" class="timer-label">Contest time</div>
+        <div id="contestTimer" class="timer">00:00:00</div>
+      </div>
+
+      <div class="right-status">
+        <button id="refreshButton" class="icon-button" type="button" title="Refresh now" aria-label="Refresh now">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0 2 5.3"/><path d="M20 4v7h-7"/></svg>
+        </button>
+        <button id="settingsButton" class="icon-button" type="button" title="Change contest" aria-label="Change contest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.38.33.72.6 1 .3.27.68.41 1.1.4H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51.6z"/></svg>
+        </button>
+        <button id="fullscreenButton" class="icon-button" type="button" title="Enter fullscreen" aria-label="Enter fullscreen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="scoreboard" aria-label="Contest standings">
+        <table class="score-table">
+          <colgroup id="colgroup">
+            <col class="rank-col"><col class="team-col"><col class="solved-col"><col class="penalty-col">
+          </colgroup>
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="standingsBody"></tbody>
+        </table>
+        <div id="emptyState" class="empty-state">No participants are visible yet.</div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div id="syncStatus" class="sync-status">
+        <span class="sync-dot"></span><span id="syncText">Waiting for contest</span>
+      </div>
+      <div id="pageDots" class="page-dots" aria-label="Scoreboard page"></div>
+      <div class="provider">Data from Codeforces · refreshes every <span id="refreshSeconds">30</span>s</div>
+    </footer>
+  </div>
+
+  <dialog id="setupDialog">
+    <form id="setupForm" class="dialog-content" method="dialog">
+      <div class="dialog-kicker">Display setup</div>
+      <h2>Choose a Codeforces contest</h2>
+      <p>Paste a contest ID or its full Codeforces URL. The display will remember it on this TV.</p>
+      <label for="contestInput">Contest ID or URL</label>
+      <input id="contestInput" type="text" inputmode="url" autocomplete="off" placeholder="e.g. 2045 or a group contest URL" required>
+      <div class="field-help">Tip: add <strong>?contest=2045</strong> to this page’s URL for a permanent display link.</div>
+      <section id="credentialsPanel" class="credentials-card" hidden>
+        <div class="credentials-title">Private group / Gym access</div>
+        <p class="credentials-copy">Server credentials are used automatically when configured. Otherwise, <a href="https://codeforces.com/settings/api" target="_blank" rel="noreferrer">create a Codeforces API key</a> and enter it here as a fallback. Your secret stays in this browser and is only used to sign requests.</p>
+        <div class="credentials-grid">
+          <div>
+            <label for="apiKeyInput">API key</label>
+            <input id="apiKeyInput" type="text" autocomplete="off" spellcheck="false" placeholder="Key">
+          </div>
+          <div>
+            <label for="apiSecretInput">API secret</label>
+            <input id="apiSecretInput" type="password" autocomplete="off" spellcheck="false" placeholder="Secret">
+          </div>
+        </div>
+        <label class="remember-row" for="rememberCredentials">
+          <input id="rememberCredentials" type="checkbox">
+          Remember credentials on this display
+        </label>
+      </section>
+      <div id="dialogError" class="dialog-error" role="alert"></div>
+      <div class="dialog-actions">
+        <button id="previewButton" class="secondary-button" type="button">View preview</button>
+        <button class="primary-button" type="submit">Show scoreboard</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script id="serverConfig" type="application/json">null</script>
+  <script>
+    (() => {
+      'use strict';
+
+      const $ = (selector) => document.querySelector(selector);
+      let serverConfig = {};
+      try { serverConfig = JSON.parse($('#serverConfig').textContent) || {}; } catch (_) {}
+      const params = new URLSearchParams(location.search);
+      const config = {
+        refreshMs: Math.max(10, Number(params.get('refresh')) || 30) * 1000,
+        firstPageMs: Math.max(5, Number(params.get('firstPageTime')) || 120) * 1000,
+        pageMs: Math.max(5, Number(params.get('pageTime')) || 30) * 1000,
+        count: Math.min(500, Math.max(20, Number(params.get('count')) || 200)),
+        showUnofficial: params.get('unofficial') !== 'false'
+      };
+
+      const explicitContestValue = params.get('contest') || String(serverConfig.contestId || '');
+      const initialContestValue = explicitContestValue || localStorage.getItem('icpc-contest-id');
+      const initialGroupCode = params.get('group') || String(serverConfig.groupCode || '') || extractGroupCode(initialContestValue) || (!explicitContestValue ? localStorage.getItem('icpc-group-code') : '') || '';
+      const storedApiKey = sessionStorage.getItem('icpc-api-key') || localStorage.getItem('icpc-api-key') || '';
+      const storedApiSecret = sessionStorage.getItem('icpc-api-secret') || localStorage.getItem('icpc-api-secret') || '';
+      const state = {
+        contestId: extractContestId(initialContestValue),
+        groupCode: initialGroupCode,
+        authRequired: serverConfig.authRequired === true || params.get('auth') === '1' || Boolean(initialGroupCode) || isRestrictedContestUrl(initialContestValue) || (!explicitContestValue && localStorage.getItem('icpc-auth-required') === 'true'),
+        apiKey: storedApiKey,
+        apiSecret: storedApiSecret,
+        rememberCredentials: Boolean(localStorage.getItem('icpc-api-key') && localStorage.getItem('icpc-api-secret')),
+        contest: null,
+        problems: [],
+        rows: [],
+        previousRanks: new Map(),
+        currentPage: 0,
+        rowsPerPage: 8,
+        problemsPerPage: 1,
+        pageTimer: null,
+        refreshTimer: null,
+        clockTimer: null,
+        loading: false,
+        demo: false,
+        lastUpdated: null
+      };
+
+      const els = {
+        contestName: $('#contestName'), phasePill: $('#phasePill'), contestIdMeta: $('#contestIdMeta'),
+        teamCount: $('#teamCount'), demoBadge: $('#demoBadge'), timerLabel: $('#timerLabel'),
+        contestTimer: $('#contestTimer'), standingsBody: $('#standingsBody'),
+        tableHead: $('#tableHead'), colgroup: $('#colgroup'), emptyState: $('#emptyState'),
+        scoreboard: document.querySelector('.scoreboard'),
+        syncStatus: $('#syncStatus'), syncText: $('#syncText'), pageDots: $('#pageDots'),
+        setupDialog: $('#setupDialog'), setupForm: $('#setupForm'), contestInput: $('#contestInput'),
+        credentialsPanel: $('#credentialsPanel'), apiKeyInput: $('#apiKeyInput'), apiSecretInput: $('#apiSecretInput'),
+        rememberCredentials: $('#rememberCredentials'),
+        dialogError: $('#dialogError'), refreshButton: $('#refreshButton'), settingsButton: $('#settingsButton'),
+        fullscreenButton: $('#fullscreenButton'), previewButton: $('#previewButton')
+      };
+
+      $('#refreshSeconds').textContent = String(config.refreshMs / 1000);
+
+      function extractContestId(value) {
+        if (!value) return null;
+        const match = String(value).match(/(?:contest\/|contests\/)?(\d{1,9})(?:\/|$|\?)/);
+        return match ? match[1] : null;
+      }
+
+      function extractGroupCode(value) {
+        if (!value) return '';
+        const match = String(value).match(/\/group\/([A-Za-z0-9]+)\/contest\//);
+        return match ? match[1] : '';
+      }
+
+      function isRestrictedContestUrl(value) {
+        return Boolean(extractGroupCode(value) || /\/gym\/\d+/.test(String(value || '')));
+      }
+
+      function contestDisplayValue() {
+        if (!state.contestId) return '';
+        if (state.groupCode) return `https://codeforces.com/group/${state.groupCode}/contest/${state.contestId}`;
+        return state.contestId;
+      }
+
+      function showCredentialsFor(value) {
+        const visible = state.authRequired || isRestrictedContestUrl(value);
+        els.credentialsPanel.hidden = !visible;
+      }
+
+      function persistCredentials() {
+        sessionStorage.setItem('icpc-api-key', state.apiKey);
+        sessionStorage.setItem('icpc-api-secret', state.apiSecret);
+        if (state.rememberCredentials) {
+          localStorage.setItem('icpc-api-key', state.apiKey);
+          localStorage.setItem('icpc-api-secret', state.apiSecret);
+        } else {
+          localStorage.removeItem('icpc-api-key');
+          localStorage.removeItem('icpc-api-secret');
+        }
+      }
+
+      async function sha512Hex(value) {
+        if (!globalThis.crypto?.subtle) {
+          throw new Error('Group contests require this page to be served over HTTPS so requests can be signed securely.');
+        }
+        const digest = await crypto.subtle.digest('SHA-512', new TextEncoder().encode(value));
+        return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      }
+
+      async function authenticatedApiUrl(methodName, methodParams) {
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        const randomBytes = new Uint8Array(6);
+        crypto.getRandomValues(randomBytes);
+        const rand = Array.from(randomBytes, (byte) => alphabet[byte % alphabet.length]).join('');
+        const entries = Object.entries({
+          ...methodParams,
+          apiKey: state.apiKey,
+          time: String(Math.floor(Date.now() / 1000))
+        }).map(([key, value]) => [key, String(value)]);
+        entries.sort(([keyA, valueA], [keyB, valueB]) => keyA.localeCompare(keyB) || valueA.localeCompare(valueB));
+        const canonicalQuery = entries.map(([key, value]) => `${key}=${value}`).join('&');
+        const signature = await sha512Hex(`${rand}/${methodName}?${canonicalQuery}#${state.apiSecret}`);
+        const query = new URLSearchParams(entries);
+        query.set('apiSig', `${rand}${signature}`);
+        return `https://codeforces.com/api/${methodName}?${query}`;
+      }
+
+      function formatDuration(totalSeconds) {
+        const seconds = Math.max(0, Math.floor(totalSeconds));
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remainder = seconds % 60;
+        return [hours, minutes, remainder].map((part) => String(part).padStart(2, '0')).join(':');
+      }
+
+      function formatClock(date) {
+        return new Intl.DateTimeFormat(undefined, {
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }).format(date);
+      }
+
+      function formatProblemTime(seconds) {
+        if (!Number.isFinite(seconds) || seconds < 0) return '';
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const rest = minutes % 60;
+        return hours ? `${hours}:${String(rest).padStart(2, '0')}` : `${minutes} min`;
+      }
+
+      function participantKey(row) {
+        return row.party.teamId ? `team:${row.party.teamId}` : row.party.members.map((member) => member.handle).join('|');
+      }
+
+      function participantName(row) {
+        if (row.party.teamName) return row.party.teamName;
+        if (row.party.participantType === 'VIRTUAL') return `${row.party.members[0]?.handle || 'Virtual'} (virtual)`;
+        return row.party.members.map((member) => member.name || member.handle).join(', ') || 'Unknown participant';
+      }
+
+      function participantMembers(row) {
+        if (!row.party.teamName || !row.party.members?.length) {
+          const type = String(row.party.participantType || '').toLowerCase();
+          return type && type !== 'contestant' ? type : '';
+        }
+        return row.party.members.map((member) => member.handle).join(' · ');
+      }
+
+      function setSync(mode, message) {
+        els.syncStatus.className = `sync-status ${mode || ''}`.trim();
+        els.syncText.textContent = message;
+      }
+
+      function updateClock() {
+        if (!state.contest) return;
+
+        const start = Number(state.contest.startTimeSeconds || 0);
+        const duration = Number(state.contest.durationSeconds || 0);
+        const nowSeconds = Date.now() / 1000;
+        const elapsed = nowSeconds - start;
+        const phase = state.contest.phase;
+
+        if (phase === 'BEFORE' || elapsed < 0) {
+          els.timerLabel.textContent = 'Starts in';
+          els.contestTimer.textContent = formatDuration(-elapsed);
+        } else if (phase === 'FINISHED') {
+          els.timerLabel.textContent = 'Contest duration';
+          els.contestTimer.textContent = formatDuration(duration);
+        } else {
+          els.timerLabel.textContent = 'Contest time';
+          els.contestTimer.textContent = formatDuration(Math.min(Math.max(elapsed, 0), duration || elapsed));
+        }
+      }
+
+      function setPhase(phase) {
+        const normalized = String(phase || '').toUpperCase();
+        els.phasePill.className = 'phase-pill';
+        if (normalized === 'FINISHED') {
+          els.phasePill.classList.add('finished');
+          els.phasePill.textContent = 'Final';
+        } else if (normalized === 'BEFORE') {
+          els.phasePill.classList.add('pending');
+          els.phasePill.textContent = 'Upcoming';
+        } else {
+          els.phasePill.textContent = 'Live';
+        }
+      }
+
+      function updateColumnLayout() {
+        const width = Math.max(1, els.scoreboard.clientWidth - 2);
+        const rankWidth = Math.min(88, Math.max(68, width * .042));
+        const solvedWidth = Math.min(112, Math.max(96, width * .058));
+        const penaltyWidth = Math.min(132, Math.max(116, width * .067));
+        const fixedWidth = rankWidth + solvedWidth + penaltyWidth;
+        const desiredTeamWidth = Math.min(430, Math.max(210, width * .22));
+        const minimumTeamWidth = Math.min(270, Math.max(170, width * .15));
+        const minimumProblemWidth = width >= 1500 ? 58 : width >= 1100 ? 50 : 48;
+        const problemCount = state.problems.length;
+        const maximumProblems = Math.max(1, Math.floor((width - fixedWidth - minimumTeamWidth) / minimumProblemWidth));
+        state.problemsPerPage = problemCount ? Math.min(problemCount, maximumProblems) : 1;
+
+        let problemWidth = problemCount
+          ? (width - fixedWidth - desiredTeamWidth) / state.problemsPerPage
+          : minimumProblemWidth;
+        problemWidth = Math.min(90, Math.max(minimumProblemWidth, problemWidth));
+        let teamWidth = width - fixedWidth - problemWidth * (problemCount ? state.problemsPerPage : 0);
+
+        if (teamWidth < minimumTeamWidth && problemCount) {
+          teamWidth = minimumTeamWidth;
+          problemWidth = (width - fixedWidth - teamWidth) / state.problemsPerPage;
+        }
+
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty('--rank-size', `${rankWidth}px`);
+        rootStyle.setProperty('--solved-size', `${solvedWidth}px`);
+        rootStyle.setProperty('--penalty-size', `${penaltyWidth}px`);
+        rootStyle.setProperty('--team-size', `${Math.max(120, teamWidth)}px`);
+        rootStyle.setProperty('--problem-size', `${Math.max(42, problemWidth)}px`);
+        els.scoreboard.classList.toggle('compact-problems', problemWidth < 62);
+      }
+
+      function buildHeader(problemIndices) {
+        els.tableHead.replaceChildren();
+        els.colgroup.replaceChildren();
+
+        const columns = [
+          ['rank-col', '#', 'Rank'], ['team-col', 'Team', 'Participants'],
+          ['solved-col', 'Solved', 'Total'], ['penalty-col', 'Penalty', 'Minutes']
+        ];
+
+        columns.forEach(([className, primary, sub]) => {
+          const col = document.createElement('col');
+          col.className = className;
+          els.colgroup.appendChild(col);
+          const th = document.createElement('th');
+          th.className = className;
+          const primarySpan = document.createElement('span');
+          primarySpan.className = 'th-primary';
+          primarySpan.textContent = primary;
+          const subSpan = document.createElement('span');
+          subSpan.className = 'th-sub';
+          subSpan.textContent = sub;
+          th.append(primarySpan, subSpan);
+          els.tableHead.appendChild(th);
+        });
+
+        problemIndices.forEach((problemIndex) => {
+          const problem = state.problems[problemIndex];
+          const col = document.createElement('col');
+          col.className = 'problem-col';
+          els.colgroup.appendChild(col);
+          const th = document.createElement('th');
+          th.className = 'problem-col';
+          th.title = problem.name || `Problem ${problem.index}`;
+          const primarySpan = document.createElement('span');
+          primarySpan.className = 'th-primary';
+          primarySpan.textContent = problem.index;
+          const subSpan = document.createElement('span');
+          subSpan.className = 'th-sub';
+          subSpan.textContent = problem.points ? `${problem.points} pts` : 'Problem';
+          th.append(primarySpan, subSpan);
+          els.tableHead.appendChild(th);
+        });
+      }
+
+      function makeRankCell(row) {
+        const td = document.createElement('td');
+        td.className = 'rank-col';
+        const rank = Number(row.rank);
+        if (rank >= 1 && rank <= 3) {
+          const badge = document.createElement('span');
+          badge.className = `medal ${rank === 2 ? 'silver' : rank === 3 ? 'bronze' : ''}`.trim();
+          badge.textContent = String(rank);
+          td.appendChild(badge);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'rank-number';
+          span.textContent = String(row.rank ?? '—');
+          td.appendChild(span);
+        }
+        return td;
+      }
+
+      function makeTeamCell(row) {
+        const td = document.createElement('td');
+        td.className = 'team-cell team-col';
+        const name = document.createElement('div');
+        name.className = 'team-name';
+        name.textContent = participantName(row);
+        name.title = name.textContent;
+        const members = document.createElement('div');
+        members.className = 'team-members';
+        members.textContent = participantMembers(row) || (row.party.ghost ? 'Out of competition' : 'Official participant');
+        td.append(name, members);
+        return td;
+      }
+
+      function makeScoreCell(value, className, formatter = String) {
+        const td = document.createElement('td');
+        td.className = className;
+        const span = document.createElement('span');
+        span.className = className === 'solved-col' ? 'score-main' : 'penalty-main';
+        span.textContent = formatter(value);
+        td.appendChild(span);
+        return td;
+      }
+
+      function makeProblemCell(result) {
+        const td = document.createElement('td');
+        td.className = 'problem-cell problem-col';
+        const box = document.createElement('div');
+        const solved = Number(result?.points || 0) > 0;
+        const attempts = Number(result?.rejectedAttemptCount || 0);
+        box.className = `problem-result ${solved ? 'solved' : attempts ? 'failed' : 'empty'}`;
+
+        const score = document.createElement('div');
+        score.className = 'problem-score';
+        if (solved) score.textContent = attempts ? `+${attempts}` : '+';
+        else if (attempts) score.textContent = `−${attempts}`;
+        else score.textContent = '·';
+        box.appendChild(score);
+
+        if (solved && Number.isFinite(result.bestSubmissionTimeSeconds)) {
+          const time = document.createElement('div');
+          time.className = 'problem-time';
+          time.textContent = formatProblemTime(result.bestSubmissionTimeSeconds);
+          box.appendChild(time);
+        }
+
+        td.appendChild(box);
+        return td;
+      }
+
+      function calculateRowsPerPage() {
+        const rootStyle = getComputedStyle(document.documentElement);
+        const rootFontSize = parseFloat(rootStyle.fontSize);
+        const headHeight = parseFloat(rootStyle.getPropertyValue('--table-head-height')) * rootFontSize;
+        const available = Math.max(0, els.scoreboard.clientHeight - headHeight - 12);
+        const targetRows = 10;
+        const maximumRowHeight = 4.65 * rootFontSize;
+        const fittedRowHeight = Math.min(maximumRowHeight, Math.max(45, available / targetRows));
+        document.documentElement.style.setProperty('--row-height', `${fittedRowHeight}px`);
+        els.scoreboard.classList.toggle('compact-rows', fittedRowHeight < 68);
+        state.rowsPerPage = targetRows;
+      }
+
+      function renderPage(animate = true) {
+        calculateRowsPerPage();
+        updateColumnLayout();
+        const teamPageCount = Math.max(1, Math.ceil(state.rows.length / state.rowsPerPage));
+        const problemPageCount = Math.max(1, Math.ceil(state.problems.length / state.problemsPerPage));
+        const pageCount = teamPageCount * problemPageCount;
+        state.currentPage = Math.min(state.currentPage, pageCount - 1);
+        const teamPage = state.currentPage % teamPageCount;
+        const problemPage = Math.floor(state.currentPage / teamPageCount);
+        const rowStart = teamPage * state.rowsPerPage;
+        const problemStart = problemPage * state.problemsPerPage;
+        const visibleRows = state.rows.slice(rowStart, rowStart + state.rowsPerPage);
+        const visibleProblemIndices = state.problems
+          .map((_, index) => index)
+          .slice(problemStart, problemStart + state.problemsPerPage);
+        buildHeader(visibleProblemIndices);
+        els.standingsBody.replaceChildren();
+        els.emptyState.classList.toggle('visible', state.rows.length === 0);
+
+        visibleRows.forEach((row, index) => {
+          const tr = document.createElement('tr');
+          tr.style.setProperty('--row-index', String(index));
+          if (animate) tr.classList.add('is-new');
+          const key = participantKey(row);
+          const oldRank = state.previousRanks.get(key);
+          if (oldRank != null && oldRank > row.rank) tr.classList.add('rank-up');
+          if (oldRank != null && oldRank < row.rank) tr.classList.add('rank-down');
+
+          tr.append(
+            makeRankCell(row),
+            makeTeamCell(row),
+            makeScoreCell(row.points ?? 0, 'solved-col', (value) => String(Math.round(value))),
+            makeScoreCell(row.penalty ?? 0, 'penalty-col', (value) => Number(value).toLocaleString())
+          );
+          visibleProblemIndices.forEach((problemIndex) => tr.appendChild(makeProblemCell(row.problemResults?.[problemIndex])));
+          els.standingsBody.appendChild(tr);
+        });
+
+        els.pageDots.replaceChildren();
+        if (problemPageCount > 1 || pageCount > 8) {
+          const label = document.createElement('span');
+          label.className = 'page-label';
+          const firstProblem = state.problems[visibleProblemIndices[0]]?.index;
+          const lastVisibleProblemIndex = visibleProblemIndices[visibleProblemIndices.length - 1];
+          const lastProblem = state.problems[lastVisibleProblemIndex]?.index;
+          const problemLabel = firstProblem
+            ? `Problems ${firstProblem}${lastProblem !== firstProblem ? `–${lastProblem}` : ''}`
+            : 'Scoreboard';
+          const rowEnd = Math.min(rowStart + state.rowsPerPage, state.rows.length);
+          const teamLabel = state.rows.length ? `Teams ${rowStart + 1}–${rowEnd} of ${state.rows.length}` : 'No teams';
+          label.textContent = `${problemLabel} · ${teamLabel}`;
+          els.pageDots.appendChild(label);
+        } else if (pageCount > 1) {
+          for (let index = 0; index < pageCount; index += 1) {
+            const dot = document.createElement('span');
+            dot.className = `page-dot ${index === state.currentPage ? 'active' : ''}`.trim();
+            els.pageDots.appendChild(dot);
+          }
+        }
+        restartPageTimer(pageCount);
+      }
+
+      function restartPageTimer(pageCount = Math.max(1, Math.ceil(state.rows.length / state.rowsPerPage))) {
+        if (pageCount <= 1) {
+          clearTimeout(state.pageTimer);
+          state.pageTimer = null;
+          return;
+        }
+        if (state.pageTimer !== null) return;
+        const delay = state.currentPage === 0 ? config.firstPageMs : config.pageMs;
+        state.pageTimer = setTimeout(() => {
+          state.pageTimer = null;
+          state.currentPage = (state.currentPage + 1) % pageCount;
+          renderPage(true);
+        }, delay);
+      }
+
+      function updateSummary() {
+        const contest = state.contest;
+        els.contestName.textContent = contest?.name || 'ICPC Live Scoreboard';
+        els.contestIdMeta.textContent = state.demo ? 'Demo contest' : `Codeforces #${contest?.id || state.contestId}`;
+        els.teamCount.textContent = `${state.rows.length.toLocaleString()} ${state.rows.length === 1 ? 'team' : 'teams'}`;
+        els.demoBadge.classList.toggle('visible', state.demo);
+        setPhase(contest?.phase);
+        updateClock();
+      }
+
+      function applyData(data, { demo = false } = {}) {
+        const result = data.result || data;
+        const nextRanks = new Map(state.rows.map((row) => [participantKey(row), row.rank]));
+        state.previousRanks = nextRanks;
+        state.contest = result.contest;
+        state.problems = result.problems || [];
+        const visibleParticipantTypes = config.showUnofficial
+          ? new Set(['CONTESTANT', 'OUT_OF_COMPETITION'])
+          : new Set(['CONTESTANT']);
+        state.rows = (result.rows || [])
+          .filter((row) => visibleParticipantTypes.has(row.party.participantType))
+          .slice(0, config.count);
+        state.demo = demo;
+        updateSummary();
+        renderPage(true);
+      }
+
+      async function fetchStandings({ silent = false } = {}) {
+        if (!state.contestId || state.loading) return;
+        state.loading = true;
+        if (!silent) setSync('loading', 'Updating standings…');
+        els.refreshButton.disabled = true;
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        try {
+          // Regular contests must use the one-parameter anonymous form. Group,
+          // Gym and mashup contests first use the server-side credential proxy.
+          // Static deployments fall back to credentials entered in the browser.
+          const signedParams = {
+            contestId: state.contestId,
+            count: config.count,
+            from: 1,
+            ...(state.groupCode
+              ? {
+                  asManager: true,
+                  groupCode: state.groupCode,
+                  participantTypes: config.showUnofficial ? 'CONTESTANT,OUT_OF_COMPETITION' : 'CONTESTANT'
+                }
+              : { showUnofficial: config.showUnofficial })
+          };
+          let response;
+          if (state.authRequired) {
+            const proxyUrl = new URL('api/standings', location.href);
+            proxyUrl.search = new URLSearchParams({
+              contestId: state.contestId,
+              groupCode: state.groupCode,
+              count: config.count,
+              showUnofficial: config.showUnofficial
+            });
+            response = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
+            if (response.status === 404) {
+              if (!state.apiKey || !state.apiSecret) {
+                throw new Error('Server credentials are not configured. Enter API credentials below or run the included scoreboard server.');
+              }
+              const endpoint = await authenticatedApiUrl('contest.standings', signedParams);
+              response = await fetch(endpoint, { signal: controller.signal, cache: 'no-store' });
+            }
+          } else {
+            const endpoint = `https://codeforces.com/api/contest.standings?contestId=${encodeURIComponent(state.contestId)}`;
+            response = await fetch(endpoint, { signal: controller.signal, cache: 'no-store' });
+          }
+          const data = await response.json().catch(() => null);
+          if (!response.ok || data?.status !== 'OK') {
+            throw new Error(data?.comment || `Codeforces returned HTTP ${response.status}`);
+          }
+          applyData(data);
+          state.lastUpdated = new Date();
+          localStorage.setItem('icpc-contest-id', state.contestId);
+          localStorage.setItem('icpc-auth-required', String(state.authRequired));
+          if (state.groupCode) localStorage.setItem('icpc-group-code', state.groupCode);
+          else localStorage.removeItem('icpc-group-code');
+          if (state.authRequired && state.apiKey && state.apiSecret) persistCredentials();
+          try { localStorage.setItem(`icpc-standings-${state.contestId}`, JSON.stringify(data)); } catch (_) {}
+          setSync('', `Updated ${formatClock(state.lastUpdated)}`);
+          els.dialogError.textContent = '';
+          if (els.setupDialog.open) els.setupDialog.close();
+        } catch (error) {
+          let message = error.name === 'AbortError' ? 'Codeforces did not respond in time' : error.message;
+          if (state.groupCode && /Contest with id .* not found/i.test(message) && !/apiKey|signature|asManager/i.test(message)) {
+            message = 'This API key cannot access the group standings. Codeforces requires its account to be a manager of the group contest.';
+          }
+          const cached = localStorage.getItem(`icpc-standings-${state.contestId}`);
+          if (!state.rows.length && cached) {
+            try {
+              applyData(JSON.parse(cached));
+              setSync('error', 'Offline · showing last saved standings');
+            } catch (_) { setSync('error', message); }
+          } else {
+            setSync('error', state.rows.length ? `${message} · will retry` : message);
+          }
+          if (els.setupDialog.open) els.dialogError.textContent = message;
+          else if (!state.rows.length && state.authRequired) {
+            showSetup();
+            els.dialogError.textContent = message;
+          }
+        } finally {
+          clearTimeout(timeout);
+          state.loading = false;
+          els.refreshButton.disabled = false;
+        }
+      }
+
+      function scheduleRefresh() {
+        clearInterval(state.refreshTimer);
+        state.refreshTimer = setInterval(() => fetchStandings({ silent: false }), config.refreshMs);
+      }
+
+      function useContest(value) {
+        const id = extractContestId(value);
+        if (!id) {
+          els.dialogError.textContent = 'Enter a valid numeric contest ID or Codeforces contest URL.';
+          return;
+        }
+        const groupCode = extractGroupCode(value);
+        const authRequired = isRestrictedContestUrl(value) || (id === state.contestId && state.authRequired);
+        const apiKey = els.apiKeyInput.value.trim();
+        const apiSecret = els.apiSecretInput.value.trim();
+        state.contestId = id;
+        state.groupCode = groupCode;
+        state.authRequired = authRequired;
+        state.apiKey = apiKey;
+        state.apiSecret = apiSecret;
+        state.rememberCredentials = els.rememberCredentials.checked;
+        state.rows = [];
+        state.problems = [];
+        state.demo = false;
+        clearTimeout(state.pageTimer);
+        state.pageTimer = null;
+        state.currentPage = 0;
+        const url = new URL(location.href);
+        url.searchParams.set('contest', id);
+        if (groupCode) url.searchParams.set('group', groupCode);
+        else url.searchParams.delete('group');
+        if (authRequired) url.searchParams.set('auth', '1');
+        else url.searchParams.delete('auth');
+        history.replaceState({}, '', url);
+        els.contestName.textContent = `Loading contest #${id}…`;
+        fetchStandings();
+        scheduleRefresh();
+      }
+
+      function showSetup() {
+        els.contestInput.value = contestDisplayValue();
+        els.apiKeyInput.value = state.apiKey;
+        els.apiSecretInput.value = state.apiSecret;
+        els.rememberCredentials.checked = state.rememberCredentials;
+        showCredentialsFor(els.contestInput.value);
+        els.dialogError.textContent = '';
+        if (!els.setupDialog.open) els.setupDialog.showModal();
+        setTimeout(() => els.contestInput.focus(), 50);
+      }
+
+      function demoData() {
+        const names = [
+          ['Binary Beasts', ['aurora', 'bitshift', 'kilobyte']], ['Stack Underflow', ['mina', 'theo', 'lin']],
+          ['Segmentation Fault', ['nova', 'dijkstra', 'turing']], ['Three Pointer Tango', ['pixel', 'vector', 'lambda']],
+          ['Runtime Terrors', ['echo', 'quark', 'flux']], ['The Greedy Bunch', ['ivy', 'nash', 'ramanujan']],
+          ['Works on Sample', ['cipher', 'atlas', 'ember']], ['DP Enjoyers', ['sage', 'orbit', 'zen']],
+          ['Coffee to Code', ['byte', 'kernel', 'sudo']], ['Wrong Answer 42', ['lumen', 'cosmo', 'rune']],
+          ['Overfit to Samples', ['delta', 'axiom', 'matrix']], ['Return of the Recursion', ['ada', 'grace', 'edsger']],
+          ['Heap Happens', ['cache', 'malloc', 'pointer']], ['The Last Submit', ['alpha', 'beta', 'gamma']]
+        ];
+        const problems = 'ABCDEFGHIJK'.split('').map((index, i) => ({ index, name: `Problem ${index}`, points: 1, i }));
+        const solvedCounts = [9, 8, 8, 7, 7, 6, 6, 6, 5, 5, 4, 4, 3, 2];
+        const rows = names.map(([teamName, handles], teamIndex) => {
+          const solved = solvedCounts[teamIndex];
+          const problemResults = problems.map((_, problemIndex) => {
+            if (problemIndex < solved) {
+              return { points: 1, rejectedAttemptCount: (teamIndex + problemIndex * 2) % 4, bestSubmissionTimeSeconds: (18 + teamIndex * 9 + problemIndex * 24) * 60 };
+            }
+            const failed = (teamIndex * 3 + problemIndex) % 5 === 0;
+            return { points: 0, rejectedAttemptCount: failed ? ((teamIndex + problemIndex) % 3) + 1 : 0 };
+          });
+          return {
+            rank: teamIndex + 1,
+            points: solved,
+            penalty: solved * 71 + teamIndex * 23,
+            party: { participantType: 'CONTESTANT', teamId: teamIndex + 1, teamName, members: handles.map((handle) => ({ handle })) },
+            problemResults
+          };
+        });
+        return {
+          contest: { id: 2045, name: 'Northern Collegiate Programming Championship 2026', phase: 'CODING', durationSeconds: 18000, startTimeSeconds: Math.floor(Date.now() / 1000) - 2 * 3600 - 14 * 60 },
+          problems, rows
+        };
+      }
+
+      els.setupForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        useContest(els.contestInput.value);
+      });
+      els.contestInput.addEventListener('input', () => showCredentialsFor(els.contestInput.value));
+      els.previewButton.addEventListener('click', () => {
+        applyData(demoData(), { demo: true });
+        els.setupDialog.close();
+        setSync('', 'Preview data · choose a contest when ready');
+      });
+      els.settingsButton.addEventListener('click', showSetup);
+      els.refreshButton.addEventListener('click', () => state.demo ? applyData(demoData(), { demo: true }) : fetchStandings());
+      els.fullscreenButton.addEventListener('click', async () => {
+        try {
+          if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+          else await document.exitFullscreen();
+        } catch (_) {}
+      });
+      window.addEventListener('resize', () => renderPage(false));
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && state.contestId && !state.demo) fetchStandings();
+      });
+
+      state.clockTimer = setInterval(updateClock, 1000);
+      updateClock();
+      if (state.contestId) {
+        fetchStandings();
+        scheduleRefresh();
+      } else {
+        applyData(demoData(), { demo: true });
+        setSync('', 'Preview data · choose a contest to go live');
+        showSetup();
+      }
+    })();
+  </script>
+</body>
+</html>
