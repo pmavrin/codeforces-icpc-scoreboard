@@ -297,6 +297,8 @@
       letter-spacing: .07em;
     }
 
+    th.problem-col .th-primary { margin-bottom: 0; }
+
     tbody tr {
       height: var(--row-height);
       background: rgba(255, 255, 255, .009);
@@ -445,8 +447,6 @@
     .scoreboard.compact-problems .problem-cell { padding-inline: .18rem; }
     .scoreboard.compact-problems .problem-result { border-radius: .58rem; }
     .scoreboard.compact-problems .problem-time { font-size: .61rem; }
-    .scoreboard.compact-problems th.problem-col .th-primary { margin-bottom: 0; }
-    .scoreboard.compact-problems th.problem-col .th-sub { display: none; }
 
     .scoreboard.compact-rows tbody td { padding-block: .25rem; }
     .scoreboard.compact-rows .team-name {
@@ -1070,10 +1070,7 @@
           const primarySpan = document.createElement('span');
           primarySpan.className = 'th-primary';
           primarySpan.textContent = problem.index;
-          const subSpan = document.createElement('span');
-          subSpan.className = 'th-sub';
-          subSpan.textContent = problem.points ? `${problem.points} pts` : 'Problem';
-          th.append(primarySpan, subSpan);
+          th.appendChild(primarySpan);
           els.tableHead.appendChild(th);
         });
       }
@@ -1248,6 +1245,7 @@
 
       function applyData(data, { demo = false } = {}) {
         const result = data.result || data;
+        const isInitialRender = state.rows.length === 0;
         const nextRanks = new Map(state.rows.map((row) => [participantKey(row), row.rank]));
         state.previousRanks = nextRanks;
         state.contest = result.contest;
@@ -1260,7 +1258,7 @@
           .slice(0, config.count);
         state.demo = demo;
         updateSummary();
-        renderPage(true);
+        renderPage(isInitialRender);
       }
 
       async function fetchStandings({ silent = false } = {}) {
