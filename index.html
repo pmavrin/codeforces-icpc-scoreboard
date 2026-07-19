@@ -306,21 +306,17 @@
 
     tbody tr:nth-child(even) { background: rgba(255, 255, 255, .028); }
 
+    tbody tr.recent-solve,
+    tbody tr.recent-solve:nth-child(even) {
+      background: linear-gradient(90deg, rgba(65, 214, 147, .13), rgba(65, 214, 147, .025) 38%, transparent 70%);
+    }
+
+    tbody tr.recent-solve .team-cell { box-shadow: inset .24rem 0 0 var(--green); }
+
     tbody tr.is-new {
       animation: reveal .55s cubic-bezier(.2,.75,.25,1) both;
       animation-delay: calc(var(--row-index) * 35ms);
     }
-
-    tbody tr.rank-up .rank-number::after,
-    tbody tr.rank-down .rank-number::after {
-      margin-left: .38rem;
-      color: var(--green);
-      font-size: .68em;
-      content: "▲";
-      vertical-align: .1em;
-    }
-
-    tbody tr.rank-down .rank-number::after { color: var(--red); content: "▼"; }
 
     @keyframes reveal {
       from { opacity: 0; transform: translateY(.45rem); }
@@ -364,7 +360,15 @@
 
     .team-cell { padding-left: 1.25rem; text-align: left; }
 
+    .team-heading {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: .65rem;
+    }
+
     .team-name {
+      min-width: 0;
       overflow: hidden;
       color: #f7f9fc;
       font-size: clamp(1.18rem, 1.47vw, 1.75rem);
@@ -373,6 +377,19 @@
       line-height: 1.12;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .recent-solve-badge {
+      flex: none;
+      padding: .24rem .46rem;
+      border: 1px solid rgba(65, 214, 147, .34);
+      border-radius: 999px;
+      color: #baffdc;
+      background: rgba(65, 214, 147, .12);
+      font-size: .6rem;
+      font-weight: 850;
+      letter-spacing: .08em;
+      text-transform: uppercase;
     }
 
     .team-members {
@@ -424,6 +441,15 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
     }
 
+    .problem-cell.recent-solve-cell .problem-result.solved {
+      border-color: #a8ffda;
+      background: linear-gradient(145deg, rgba(42, 190, 132, .95), rgba(20, 139, 95, .96));
+      box-shadow:
+        0 0 0 2px rgba(65, 214, 147, .3),
+        0 0 1.15rem rgba(65, 214, 147, .27),
+        inset 0 1px 0 rgba(255, 255, 255, .2);
+    }
+
     .problem-result.failed {
       border-color: rgba(255, 107, 112, .18);
       color: #ff8e92;
@@ -458,6 +484,10 @@
       margin-top: .08rem;
       font-size: .72rem;
       line-height: 1;
+    }
+    .scoreboard.compact-rows .recent-solve-badge {
+      padding: .18rem .36rem;
+      font-size: .53rem;
     }
     .scoreboard.compact-rows .medal {
       width: 2.4rem;
@@ -809,6 +839,7 @@
         refreshMs: Math.max(10, Number(params.get('refresh')) || 30) * 1000,
         firstPageMs: Math.max(5, Number(params.get('firstPageTime')) || 120) * 1000,
         pageMs: Math.max(5, Number(params.get('pageTime')) || 30) * 1000,
+        recentSolveMs: Math.max(30, Number(params.get('recentSolveTime')) || 240) * 1000,
         count: Math.min(500, Math.max(20, Number(params.get('count')) || 200)),
         showUnofficial: params.get('unofficial') !== 'false'
       };
@@ -828,7 +859,7 @@
         contest: null,
         problems: [],
         rows: [],
-        previousRanks: new Map(),
+        recentSolves: new Map(),
         currentPage: 0,
         rowsPerPage: 8,
         problemsPerPage: 1,
@@ -959,6 +990,18 @@
           return type && type !== 'contestant' ? type : '';
         }
         return row.party.members.map((member) => member.handle).join(' · ');
+      }
+
+      function newlySolvedProblemIndices(previousRow, currentRow) {
+        if (!previousRow) return [];
+        const indices = [];
+        currentRow.problemResults?.forEach((problem, index) => {
+          if (
+            Number(problem?.points || 0) > 0 &&
+            Number(previousRow.problemResults?.[index]?.points || 0) <= 0
+          ) indices.push(index);
+        });
+        return indices;
       }
 
       function setSync(mode, message) {
@@ -1093,17 +1136,26 @@
         return td;
       }
 
-      function makeTeamCell(row) {
+      function makeTeamCell(row, recentProblemLabels = []) {
         const td = document.createElement('td');
         td.className = 'team-cell team-col';
+        const heading = document.createElement('div');
+        heading.className = 'team-heading';
         const name = document.createElement('div');
         name.className = 'team-name';
         name.textContent = participantName(row);
         name.title = name.textContent;
+        heading.appendChild(name);
+        if (recentProblemLabels.length) {
+          const badge = document.createElement('span');
+          badge.className = 'recent-solve-badge';
+          badge.textContent = `Solved ${recentProblemLabels.join(', ')}`;
+          heading.appendChild(badge);
+        }
         const members = document.createElement('div');
         members.className = 'team-members';
         members.textContent = participantMembers(row) || (row.party.ghost ? 'Out of competition' : 'Official participant');
-        td.append(name, members);
+        td.append(heading, members);
         return td;
       }
 
@@ -1117,9 +1169,10 @@
         return td;
       }
 
-      function makeProblemCell(result) {
+      function makeProblemCell(result, hasRecentSolve = false) {
         const td = document.createElement('td');
         td.className = 'problem-cell problem-col';
+        if (hasRecentSolve) td.classList.add('recent-solve-cell');
         const box = document.createElement('div');
         const solved = Number(result?.points || 0) > 0;
         const attempts = Number(result?.rejectedAttemptCount || 0);
@@ -1180,17 +1233,26 @@
           tr.style.setProperty('--row-index', String(index));
           if (animate) tr.classList.add('is-new');
           const key = participantKey(row);
-          const oldRank = state.previousRanks.get(key);
-          if (oldRank != null && oldRank > row.rank) tr.classList.add('rank-up');
-          if (oldRank != null && oldRank < row.rank) tr.classList.add('rank-down');
+          const recentProblems = state.recentSolves.get(key);
+          const now = Date.now();
+          const recentProblemLabels = recentProblems
+            ? [...recentProblems.entries()]
+                .filter(([, expiresAt]) => expiresAt > now)
+                .map(([problemIndex]) => state.problems[problemIndex]?.index || String(problemIndex + 1))
+            : [];
+          const hasRecentSolve = recentProblemLabels.length > 0;
+          if (hasRecentSolve) tr.classList.add('recent-solve');
 
           tr.append(
             makeRankCell(row),
-            makeTeamCell(row),
+            makeTeamCell(row, recentProblemLabels),
             makeScoreCell(row.points ?? 0, 'solved-col', (value) => String(Math.round(value))),
             makeScoreCell(row.penalty ?? 0, 'penalty-col', (value) => Number(value).toLocaleString())
           );
-          visibleProblemIndices.forEach((problemIndex) => tr.appendChild(makeProblemCell(row.problemResults?.[problemIndex])));
+          visibleProblemIndices.forEach((problemIndex) => tr.appendChild(makeProblemCell(
+            row.problemResults?.[problemIndex],
+            (recentProblems?.get(problemIndex) || 0) > now
+          )));
           els.standingsBody.appendChild(tr);
         });
 
@@ -1246,16 +1308,38 @@
       function applyData(data, { demo = false } = {}) {
         const result = data.result || data;
         const isInitialRender = state.rows.length === 0;
-        const nextRanks = new Map(state.rows.map((row) => [participantKey(row), row.rank]));
-        state.previousRanks = nextRanks;
+        const previousRows = new Map(state.rows.map((row) => [participantKey(row), row]));
+        const now = Date.now();
+        for (const [key, recentProblems] of state.recentSolves) {
+          for (const [problemIndex, expiresAt] of recentProblems) {
+            if (expiresAt <= now) recentProblems.delete(problemIndex);
+          }
+          if (recentProblems.size === 0) state.recentSolves.delete(key);
+        }
         state.contest = result.contest;
         state.problems = result.problems || [];
         const visibleParticipantTypes = config.showUnofficial
           ? new Set(['CONTESTANT', 'OUT_OF_COMPETITION'])
           : new Set(['CONTESTANT']);
-        state.rows = (result.rows || [])
+        const nextRows = (result.rows || [])
           .filter((row) => visibleParticipantTypes.has(row.party.participantType))
           .slice(0, config.count);
+        if (isInitialRender) {
+          state.recentSolves.clear();
+        } else {
+          nextRows.forEach((row) => {
+            const key = participantKey(row);
+            const newlySolved = newlySolvedProblemIndices(previousRows.get(key), row);
+            if (newlySolved.length) {
+              const recentProblems = state.recentSolves.get(key) || new Map();
+              newlySolved.forEach((problemIndex) => {
+                recentProblems.set(problemIndex, now + config.recentSolveMs);
+              });
+              state.recentSolves.set(key, recentProblems);
+            }
+          });
+        }
+        state.rows = nextRows;
         state.demo = demo;
         updateSummary();
         renderPage(isInitialRender);
