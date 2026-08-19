@@ -1,4 +1,5 @@
 {
+  "source": "codeforces",
   "api_key": "your-codeforces-api-key",
   "api_secret": "your-codeforces-api-secret",
   "contest_id": 620457,

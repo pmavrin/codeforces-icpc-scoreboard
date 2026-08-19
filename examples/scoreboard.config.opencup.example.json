@@ -1,0 +1,30 @@
+{
+  "source": "opencup",
+  "opencup_url": "https://pafos25.opencup.org/resday8",
+  "university_aliases": {
+    "Delft University of Technology": "TU Delft",
+    "Kharkiv National University of Radio Electronics": "KNURE",
+    "University of Wroclaw": "UWr",
+    "University of Novi Sad": "UNS",
+    "Università di Pisa": "UniPi",
+    "Karlsruhe Institute of Technology": "KIT",
+    "Neapolis University Pafos": "NUP",
+    "University of Maryland": "UMD",
+    "Jagiellonian University": "UJ",
+    "University of Warsaw": "UW",
+    "University of Belgrade": "UB",
+    "Ecole Polytechnique Fédérale de Lausanne": "EPFL",
+    "Hasso Plattner Institute": "HPI",
+    "Universiteit Utrecht": "UU",
+    "Saarland University": "Saarland",
+    "Ecole Polytechnique": "Polytechnique",
+    "Constructor University": "Constructor",
+    "Union University - Faculty of Computer Science": "RAF",
+    "Technical University of Munich": "TUM",
+    "Alexandru Ioan Cuza University of Iași": "UAIC",
+    "University of Tartu": "Tartu",
+    "University of Central Lancashire Cyprus": "UCLan Cyprus"
+  },
+  "host": "0.0.0.0",
+  "port": 8080
+}

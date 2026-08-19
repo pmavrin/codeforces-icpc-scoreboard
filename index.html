@@ -849,12 +849,18 @@
         showUnofficial: params.get('unofficial') !== 'false'
       };
 
+      const initialSource = String(params.get('source') || serverConfig.source || 'codeforces').toLowerCase();
+      const initialOpenCupUrl = params.get('url') || String(serverConfig.opencupUrl || '') || localStorage.getItem('icpc-opencup-url') || '';
       const explicitContestValue = params.get('contest') || String(serverConfig.contestId || '');
       const initialContestValue = explicitContestValue || localStorage.getItem('icpc-contest-id');
       const initialGroupCode = params.get('group') || String(serverConfig.groupCode || '') || extractGroupCode(initialContestValue) || (!explicitContestValue ? localStorage.getItem('icpc-group-code') : '') || '';
       const storedApiKey = sessionStorage.getItem('icpc-api-key') || localStorage.getItem('icpc-api-key') || '';
       const storedApiSecret = sessionStorage.getItem('icpc-api-secret') || localStorage.getItem('icpc-api-secret') || '';
       const state = {
+        source: initialSource || 'codeforces',
+        sourceLabel: String(serverConfig.sourceLabel || (initialSource === 'opencup' ? 'OpenCup' : 'Codeforces')),
+        universityAliases: serverConfig.universityAliases || {},
+        opencupUrl: initialOpenCupUrl,
         contestId: extractContestId(initialContestValue),
         groupCode: initialGroupCode,
         authRequired: serverConfig.authRequired === true || params.get('auth') === '1' || Boolean(initialGroupCode) || isRestrictedContestUrl(initialContestValue) || (!explicitContestValue && localStorage.getItem('icpc-auth-required') === 'true'),
@@ -889,6 +895,7 @@
         dialogError: $('#dialogError'), refreshButton: $('#refreshButton'), settingsButton: $('#settingsButton'),
         fullscreenButton: $('#fullscreenButton'), previewButton: $('#previewButton')
       };
+      els.provider = document.querySelector('.provider');
 
       $('#refreshSeconds').textContent = String(config.refreshMs / 1000);
 
@@ -909,6 +916,7 @@
       }
 
       function contestDisplayValue() {
+        if (state.source === 'opencup') return state.opencupUrl || '';
         if (!state.contestId) return '';
         if (state.groupCode) return `https://codeforces.com/group/${state.groupCode}/contest/${state.contestId}`;
         return state.contestId;
@@ -995,6 +1003,34 @@
           return type && type !== 'contestant' ? type : '';
         }
         return row.party.members.map((member) => member.handle).join(' · ');
+      }
+
+      function splitStructuredTeamName(teamName) {
+        const match = String(teamName || '').match(/^([^:]+):\s*(.*?)\s*\(([^()]*)\)\s*$/);
+        if (!match) return null;
+        return {
+          university: match[1].trim(),
+          name: match[2].trim(),
+          participants: match[3].trim()
+        };
+      }
+
+      function participantDisplay(row) {
+        const fullName = participantName(row);
+        const structured = row.party.teamName ? splitStructuredTeamName(row.party.teamName) : null;
+        if (structured) {
+          const university = state.universityAliases[structured.university] || structured.university;
+          return {
+            name: `${university}: ${structured.name}`,
+            details: structured.participants,
+            title: fullName
+          };
+        }
+        return {
+          name: fullName,
+          details: participantMembers(row) || (row.party.ghost ? 'Out of competition' : 'Official participant'),
+          title: fullName
+        };
       }
 
       function newlySolvedProblemIndices(previousRow, currentRow) {
@@ -1144,12 +1180,13 @@
       function makeTeamCell(row, recentProblemLabels = []) {
         const td = document.createElement('td');
         td.className = 'team-cell team-col';
+        const display = participantDisplay(row);
         const heading = document.createElement('div');
         heading.className = 'team-heading';
         const name = document.createElement('div');
         name.className = 'team-name';
-        name.textContent = participantName(row);
-        name.title = name.textContent;
+        name.textContent = display.name;
+        name.title = display.title;
         heading.appendChild(name);
         if (recentProblemLabels.length) {
           const badge = document.createElement('span');
@@ -1159,7 +1196,8 @@
         }
         const members = document.createElement('div');
         members.className = 'team-members';
-        members.textContent = participantMembers(row) || (row.party.ghost ? 'Out of competition' : 'Official participant');
+        members.textContent = display.details;
+        members.title = display.title;
         td.append(heading, members);
         return td;
       }
@@ -1303,8 +1341,13 @@
       function updateSummary() {
         const contest = state.contest;
         els.contestName.textContent = contest?.name || 'ICPC Live Scoreboard';
-        els.contestIdMeta.textContent = state.demo ? 'Demo contest' : `Codeforces #${contest?.id || state.contestId}`;
+        els.contestIdMeta.textContent = state.demo
+          ? 'Demo contest'
+          : state.source !== 'codeforces'
+            ? `${state.sourceLabel} standings`
+            : `Codeforces #${contest?.id || state.contestId}`;
         els.teamCount.textContent = `${state.rows.length.toLocaleString()} ${state.rows.length === 1 ? 'team' : 'teams'}`;
+        els.provider.innerHTML = `Data from ${state.sourceLabel} · refreshes every <span id="refreshSeconds">${config.refreshMs / 1000}</span>s`;
         els.demoBadge.classList.toggle('visible', state.demo);
         setPhase(contest?.phase);
         updateClock();
@@ -1351,7 +1394,7 @@
       }
 
       async function fetchStandings({ silent = false } = {}) {
-        if (!state.contestId || state.loading) return;
+        if ((state.source === 'codeforces' && !state.contestId) || (state.source === 'opencup' && !state.opencupUrl) || state.loading) return;
         state.loading = true;
         if (!silent) setSync('loading', 'Updating standings…');
         els.refreshButton.disabled = true;
@@ -1359,6 +1402,27 @@
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 12000);
         try {
+          if (state.source !== 'codeforces') {
+            const proxyUrl = new URL('api/standings', location.href);
+            proxyUrl.search = new URLSearchParams({
+              source: state.source,
+              ...(state.opencupUrl ? { url: state.opencupUrl } : {})
+            });
+            const response = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
+            const data = await response.json().catch(() => null);
+            if (!response.ok || data?.status !== 'OK') {
+              throw new Error(data?.comment || `${state.sourceLabel} returned HTTP ${response.status}`);
+            }
+            applyData(data);
+            state.lastUpdated = new Date();
+            localStorage.setItem('icpc-source', state.source);
+            if (state.opencupUrl) localStorage.setItem('icpc-opencup-url', state.opencupUrl);
+            try { localStorage.setItem(`icpc-standings-${state.source}-${state.opencupUrl || 'configured'}`, JSON.stringify(data)); } catch (_) {}
+            setSync('', `Updated ${formatClock(state.lastUpdated)}`);
+            els.dialogError.textContent = '';
+            if (els.setupDialog.open) els.setupDialog.close();
+            return;
+          }
           // Regular contests must use the one-parameter anonymous form. Group,
           // Gym and mashup contests first use the server-side credential proxy.
           // Static deployments fall back to credentials entered in the browser.
@@ -1442,6 +1506,29 @@
       }
 
       function useContest(value) {
+        if (state.source === 'opencup') {
+          let parsedUrl;
+          try { parsedUrl = new URL(value); } catch (_) {}
+          if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol)) {
+            els.dialogError.textContent = 'Enter a valid OpenCup standings URL.';
+            return;
+          }
+          state.opencupUrl = parsedUrl.href;
+          state.rows = [];
+          state.problems = [];
+          state.demo = false;
+          clearTimeout(state.pageTimer);
+          state.pageTimer = null;
+          state.currentPage = 0;
+          const url = new URL(location.href);
+          url.searchParams.set('source', 'opencup');
+          url.searchParams.set('url', state.opencupUrl);
+          history.replaceState({}, '', url);
+          els.contestName.textContent = 'Loading OpenCup standings…';
+          fetchStandings();
+          scheduleRefresh();
+          return;
+        }
         const id = extractContestId(value);
         if (!id) {
           els.dialogError.textContent = 'Enter a valid numeric contest ID or Codeforces contest URL.';
@@ -1541,12 +1628,16 @@
       });
       window.addEventListener('resize', () => renderPage(false));
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && state.contestId && !state.demo) fetchStandings();
+        if (!document.hidden && !state.demo && (state.contestId || state.opencupUrl)) fetchStandings();
       });
 
       state.clockTimer = setInterval(updateClock, 1000);
       updateClock();
-      if (state.contestId) {
+      if (state.source !== 'codeforces' && (state.source !== 'opencup' || state.opencupUrl)) {
+        els.contestName.textContent = `Loading ${state.sourceLabel} standings…`;
+        fetchStandings();
+        scheduleRefresh();
+      } else if (state.contestId) {
         fetchStandings();
         scheduleRefresh();
       } else {

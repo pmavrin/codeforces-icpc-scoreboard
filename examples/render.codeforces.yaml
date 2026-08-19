@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: codeforces-icpc-scoreboard
+    runtime: python
+    plan: free
+    buildCommand: python3 -m py_compile server.py
+    startCommand: python3 server.py
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: SCOREBOARD_SOURCE
+        value: codeforces
+      - key: CODEFORCES_API_KEY
+        sync: false
+      - key: CODEFORCES_API_SECRET
+        sync: false
+      - key: CODEFORCES_CONTEST_ID
+        value: "620457"
+      - key: CODEFORCES_GROUP_CODE
+        value: NLXJakpbHN
