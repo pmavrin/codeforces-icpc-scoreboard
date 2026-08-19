@@ -393,11 +393,12 @@
     }
 
     .team-members {
-      margin-top: .35rem;
+      margin-top: .26rem;
       overflow: hidden;
       color: #8193aa;
-      font-size: clamp(.76rem, .84vw, .98rem);
-      font-weight: 620;
+      font-size: clamp(.66rem, .68vw, .82rem);
+      font-weight: 600;
+      line-height: 1.12;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -482,7 +483,7 @@
     .scoreboard.compact-rows .team-members {
       display: block;
       margin-top: .08rem;
-      font-size: .72rem;
+      font-size: .62rem;
       line-height: 1;
     }
     .scoreboard.compact-rows .recent-solve-badge {
@@ -720,7 +721,7 @@
     @media (max-width: 1200px) {
       :root { --problem-size: 4.45rem; --penalty-size: 6.6rem; --solved-size: 5.8rem; }
       .topbar { gap: 1.3rem; }
-      .team-members { display: none; }
+      .team-members { font-size: .6rem; }
       .team-name { font-size: 1.18rem; }
     }
 
@@ -1088,11 +1089,11 @@
       function updateColumnLayout() {
         const width = Math.max(1, els.scoreboard.clientWidth - 2);
         const rankWidth = Math.min(88, Math.max(68, width * .042));
-        const solvedWidth = Math.min(112, Math.max(96, width * .058));
-        const penaltyWidth = Math.min(132, Math.max(116, width * .067));
+        const solvedWidth = Math.min(104, Math.max(88, width * .052));
+        const penaltyWidth = Math.min(124, Math.max(104, width * .06));
         const fixedWidth = rankWidth + solvedWidth + penaltyWidth;
-        const desiredTeamWidth = Math.min(430, Math.max(210, width * .22));
-        const minimumTeamWidth = Math.min(270, Math.max(170, width * .15));
+        const desiredTeamWidth = Math.min(620, Math.max(300, width * .3));
+        const minimumTeamWidth = Math.min(360, Math.max(230, width * .2));
         const minimumProblemWidth = width >= 1500 ? 58 : width >= 1100 ? 50 : 48;
         const problemCount = state.problems.length;
         const maximumProblems = Math.max(1, Math.floor((width - fixedWidth - minimumTeamWidth) / minimumProblemWidth));
@@ -1101,7 +1102,7 @@
         let problemWidth = problemCount
           ? (width - fixedWidth - desiredTeamWidth) / state.problemsPerPage
           : minimumProblemWidth;
-        problemWidth = Math.min(90, Math.max(minimumProblemWidth, problemWidth));
+        problemWidth = Math.min(84, Math.max(minimumProblemWidth, problemWidth));
         let teamWidth = width - fixedWidth - problemWidth * (problemCount ? state.problemsPerPage : 0);
 
         if (teamWidth < minimumTeamWidth && problemCount) {
