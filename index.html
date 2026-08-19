@@ -1256,9 +1256,10 @@
         const available = Math.max(0, els.scoreboard.clientHeight - headHeight - 12);
         const targetRows = 10;
         const maximumRowHeight = 4.65 * rootFontSize;
-        const fittedRowHeight = Math.min(maximumRowHeight, Math.max(45, available / targetRows));
+        const rowSafety = targetRows * 2;
+        const fittedRowHeight = Math.min(maximumRowHeight, Math.max(43, (available - rowSafety) / targetRows));
         document.documentElement.style.setProperty('--row-height', `${fittedRowHeight}px`);
-        els.scoreboard.classList.toggle('compact-rows', fittedRowHeight < 68);
+        els.scoreboard.classList.toggle('compact-rows', fittedRowHeight < 72);
         state.rowsPerPage = targetRows;
       }
 
