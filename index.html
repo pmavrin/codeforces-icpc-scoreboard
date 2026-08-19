@@ -1007,12 +1007,21 @@
       }
 
       function splitStructuredTeamName(teamName) {
-        const match = String(teamName || '').match(/^([^:]+):\s*(.*?)\s*\(([^()]*)\)\s*$/);
-        if (!match) return null;
+        const value = String(teamName || '').trim();
+        const match = value.match(/^([^:]+):\s*(.*?)\s*\(([^()]*)\)\s*$/);
+        if (match) {
+          return {
+            university: match[1].trim(),
+            name: match[2].trim(),
+            participants: match[3].trim()
+          };
+        }
+        const teamOnlyMatch = value.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+        if (!teamOnlyMatch) return null;
         return {
-          university: match[1].trim(),
-          name: match[2].trim(),
-          participants: match[3].trim()
+          university: '',
+          name: teamOnlyMatch[1].trim(),
+          participants: teamOnlyMatch[2].trim()
         };
       }
 
@@ -1020,9 +1029,9 @@
         const fullName = participantName(row);
         const structured = row.party.teamName ? splitStructuredTeamName(row.party.teamName) : null;
         if (structured) {
-          const university = state.universityAliases[structured.university] || structured.university;
+          const university = structured.university ? state.universityAliases[structured.university] || structured.university : '';
           return {
-            name: `${university}: ${structured.name}`,
+            name: university ? `${university}: ${structured.name}` : structured.name,
             details: structured.participants,
             title: fullName
           };
