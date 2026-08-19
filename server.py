@@ -160,8 +160,11 @@ class StandingsTableParser(HTMLParser):
                 "tag": tag,
                 "classes": class_names,
                 "title": attrs_dict.get("title", ""),
+                "first_to_solve": "first-to-solve" in class_names,
                 "text": [],
             }
+        elif self.current_cell is not None and "first-to-solve" in class_names:
+            self.current_cell["first_to_solve"] = True
         elif tag == "br" and self.current_cell is not None:
             self.current_cell["text"].append("\n")
 
@@ -218,6 +221,8 @@ def parse_opencup_cell(cell: dict[str, Any]) -> dict[str, Any]:
         "points": 1 if accepted else 0,
         "rejectedAttemptCount": rejected,
     }
+    if accepted and cell.get("first_to_solve"):
+        result["firstToSolve"] = True
     time_match = re.search(r"(\d{1,2}:\d{2}(?::\d{2})?)", text)
     if accepted and time_match:
         result["bestSubmissionTimeSeconds"] = parse_duration_to_seconds(time_match.group(1))

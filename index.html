@@ -306,6 +306,10 @@
 
     tbody tr:nth-child(even) { background: rgba(255, 255, 255, .028); }
 
+    tbody tr.score-group-start td {
+      border-top: 4px solid rgba(184, 206, 235, .42);
+    }
+
     tbody tr.recent-solve,
     tbody tr.recent-solve:nth-child(even) {
       background: linear-gradient(90deg, rgba(65, 214, 147, .13), rgba(65, 214, 147, .025) 38%, transparent 70%);
@@ -440,6 +444,15 @@
       color: #d9ffef;
       background: linear-gradient(145deg, rgba(25, 154, 104, .72), rgba(17, 118, 83, .78));
       box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
+    }
+
+    .problem-result.first-to-solve {
+      border-color: rgba(255, 226, 124, .5);
+      color: #fff6c8;
+      background: linear-gradient(145deg, rgba(68, 176, 113, .92), rgba(139, 133, 37, .9));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .18),
+        0 0 1rem rgba(255, 226, 124, .13);
     }
 
     .problem-cell.recent-solve-cell .problem-result.solved {
@@ -1229,7 +1242,7 @@
         const box = document.createElement('div');
         const solved = Number(result?.points || 0) > 0;
         const attempts = Number(result?.rejectedAttemptCount || 0);
-        box.className = `problem-result ${solved ? 'solved' : attempts ? 'failed' : 'empty'}`;
+        box.className = `problem-result ${solved ? 'solved' : attempts ? 'failed' : 'empty'} ${solved && result?.firstToSolve ? 'first-to-solve' : ''}`.trim();
 
         const score = document.createElement('div');
         score.className = 'problem-score';
@@ -1286,6 +1299,10 @@
           const tr = document.createElement('tr');
           tr.style.setProperty('--row-index', String(index));
           if (animate) tr.classList.add('is-new');
+          const absoluteRowIndex = rowStart + index;
+          if (absoluteRowIndex > 0 && Number(state.rows[absoluteRowIndex - 1]?.points || 0) !== Number(row.points || 0)) {
+            tr.classList.add('score-group-start');
+          }
           const key = participantKey(row);
           const recentProblems = state.recentSolves.get(key);
           const now = Date.now();
