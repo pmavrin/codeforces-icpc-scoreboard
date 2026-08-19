@@ -132,6 +132,7 @@ class StandingsTableParser(HTMLParser):
         self.in_row = False
         self.current_cells: list[dict[str, Any]] = []
         self.current_cell: dict[str, Any] | None = None
+        self.found_standings = False
         self.problems: list[dict[str, Any]] = []
         self.rows: list[list[dict[str, Any]]] = []
 
@@ -140,6 +141,7 @@ class StandingsTableParser(HTMLParser):
         class_names = set(attrs_dict.get("class", "").split())
         if tag == "table" and "standings" in class_names:
             self.in_standings = True
+            self.found_standings = True
             self.table_depth = 1
             return
         if not self.in_standings:
@@ -225,7 +227,7 @@ def parse_opencup_cell(cell: dict[str, Any]) -> dict[str, Any]:
 def parse_opencup_standings(page: str, source_url: str) -> dict[str, Any]:
     parser = StandingsTableParser()
     parser.feed(page)
-    if not parser.problems or not parser.rows:
+    if not parser.found_standings or not parser.problems:
         raise ValueError("OpenCup standings table was not found in the HTML page.")
 
     title_match = re.search(r"<h2[^>]*>(.*?)</h2>", page, re.IGNORECASE | re.DOTALL)
