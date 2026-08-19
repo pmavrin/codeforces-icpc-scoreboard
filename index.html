@@ -470,6 +470,15 @@
       background: var(--red-soft);
     }
 
+    .problem-result.frozen {
+      border-color: rgba(126, 143, 218, .34);
+      color: #d9e2ff;
+      background: linear-gradient(145deg, rgba(49, 59, 118, .62), rgba(32, 40, 86, .72));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .07),
+        0 0 0 1px rgba(126, 143, 218, .06);
+    }
+
     .problem-result.empty { color: #4e6076; }
 
     .problem-score {
@@ -1242,11 +1251,13 @@
         const box = document.createElement('div');
         const solved = Number(result?.points || 0) > 0;
         const attempts = Number(result?.rejectedAttemptCount || 0);
-        box.className = `problem-result ${solved ? 'solved' : attempts ? 'failed' : 'empty'} ${solved && result?.firstToSolve ? 'first-to-solve' : ''}`.trim();
+        const frozen = result?.frozen === true;
+        box.className = `problem-result ${solved ? 'solved' : frozen ? 'frozen' : attempts ? 'failed' : 'empty'} ${solved && result?.firstToSolve ? 'first-to-solve' : ''}`.trim();
 
         const score = document.createElement('div');
         score.className = 'problem-score';
         if (solved) score.textContent = attempts ? `+${attempts}` : '+';
+        else if (frozen) score.textContent = result.pendingAttemptCount ? `?${result.pendingAttemptCount}` : '?';
         else if (attempts) score.textContent = `−${attempts}`;
         else score.textContent = '·';
         box.appendChild(score);

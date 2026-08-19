@@ -214,6 +214,17 @@ def parse_opencup_cell(cell: dict[str, Any]) -> dict[str, Any]:
     text = normalize_spaces("".join(cell["text"]))
     if not text or text == ".":
         return {"points": 0, "rejectedAttemptCount": 0}
+    if text.startswith("?"):
+        pending_match = re.match(r"^\?(\d+)?", text)
+        pending = int(pending_match.group(1) or 0) if pending_match else 0
+        result: dict[str, Any] = {
+            "points": 0,
+            "rejectedAttemptCount": 0,
+            "frozen": True,
+        }
+        if pending:
+            result["pendingAttemptCount"] = pending
+        return result
     accepted = text.startswith("+")
     rejected_match = re.match(r"^[+\-−](\d+)?", text)
     rejected = int(rejected_match.group(1) or 0) if rejected_match else 0
