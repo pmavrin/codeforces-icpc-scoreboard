@@ -43,7 +43,7 @@ class StandingsSource:
     query_config: Callable[[dict[str, list[str]]], dict[str, Any]]
 
 
-def load_config() -> dict[str, Any]:
+def load_raw_config() -> dict[str, Any]:
     config: dict[str, Any] = {}
     if CONFIG_PATH.exists():
         config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -61,6 +61,10 @@ def load_config() -> dict[str, Any]:
     if os.environ.get("PORT"):
         config["port"] = os.environ["PORT"]
 
+    return config
+
+
+def validate_config(config: dict[str, Any]) -> dict[str, Any]:
     source = normalize_source(config.get("source", "codeforces"))
     config["source"] = source
     adapter = STANDINGS_SOURCES[source]
@@ -73,6 +77,10 @@ def load_config() -> dict[str, Any]:
             f"Set {environment_names} or configure {CONFIG_PATH.name}."
         )
     return config
+
+
+def load_config() -> dict[str, Any]:
+    return validate_config(load_raw_config())
 
 
 def normalize_source(value: Any) -> str:
@@ -102,8 +110,13 @@ def request_source(query: dict[str, list[str]]) -> str | None:
 def load_request_config(query: dict[str, list[str]]) -> dict[str, Any]:
     source = request_source(query)
     if source:
-        config = STANDINGS_SOURCES[source].query_config(query)
+        config = {
+            **load_raw_config(),
+            **STANDINGS_SOURCES[source].query_config(query),
+        }
         config["source"] = source
+        if source != "opencup":
+            validate_config(config)
         return config
     return load_config()
 
@@ -275,7 +288,7 @@ def parse_opencup_standings(page: str, source_url: str) -> dict[str, Any]:
             "penalty": int(normalize_spaces("".join(penalty_cell["text"])) or 0),
             "party": {
                 "participantType": "CONTESTANT",
-                "teamId": row_index + 1,
+                "teamId": int(hashlib.sha1(team_name.encode("utf-8")).hexdigest()[:12], 16),
                 "teamName": team_name,
                 "members": [],
             },
