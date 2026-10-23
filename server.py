@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import http.client
 import re
 import json
 import os
@@ -19,6 +20,9 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable
 
+from domjudge import parse_domjudge_standings
+from public_http import read_public_html
+
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("SCOREBOARD_CONFIG", ROOT / "scoreboard.config.json"))
@@ -30,6 +34,8 @@ ENV_CONFIG = {
     "group_code": "CODEFORCES_GROUP_CODE",
     "source": "SCOREBOARD_SOURCE",
     "opencup_url": "OPENCUP_STANDINGS_URL",
+    "opentrains_url": "OPENTRAINS_STANDINGS_URL",
+    "domjudge_url": "DOMJUDGE_STANDINGS_URL",
     "university_aliases": "UNIVERSITY_ALIASES",
 }
 
@@ -60,6 +66,8 @@ def load_raw_config() -> dict[str, Any]:
         config["host"] = os.environ["HOST"]
     if os.environ.get("PORT"):
         config["port"] = os.environ["PORT"]
+    if config.get("opencup_url") and not config.get("opentrains_url"):
+        config["opentrains_url"] = config["opencup_url"]
 
     return config
 
@@ -80,11 +88,15 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_config() -> dict[str, Any]:
-    return validate_config(load_raw_config())
+    config = load_raw_config()
+    config["source"] = normalize_source(config.get("source", "codeforces"))
+    return config
 
 
 def normalize_source(value: Any) -> str:
     source = str(value or "codeforces").lower()
+    if source == "opencup":
+        source = "opentrains"
     if source not in STANDINGS_SOURCES:
         supported = ", ".join(sorted(STANDINGS_SOURCES))
         raise RuntimeError(f"Unsupported standings source: {source}. Supported sources: {supported}.")
@@ -103,8 +115,10 @@ def request_source(query: dict[str, list[str]]) -> str | None:
     requested = query.get("source", [""])[0]
     if not requested:
         return None
-    source = str(requested).lower()
-    return source if source in STANDINGS_SOURCES else None
+    try:
+        return normalize_source(requested)
+    except RuntimeError:
+        return None
 
 
 def load_request_config(query: dict[str, list[str]]) -> dict[str, Any]:
@@ -115,8 +129,6 @@ def load_request_config(query: dict[str, list[str]]) -> dict[str, Any]:
             **STANDINGS_SOURCES[source].query_config(query),
         }
         config["source"] = source
-        if source != "opencup":
-            validate_config(config)
         return config
     return load_config()
 
@@ -336,7 +348,7 @@ def codeforces_public_config(config: dict[str, Any]) -> dict[str, Any]:
         "contestId": config.get("contest_id"),
         "groupCode": config.get("group_code", ""),
         "opencupUrl": "",
-        "authRequired": True,
+        "authRequired": bool(config.get("group_code")),
     }
 
 
@@ -350,8 +362,14 @@ def fetch_codeforces_standings(
 ) -> tuple[int, str, bytes]:
     contest_id = query.get("contestId", [""])[0]
     group_code = query.get("groupCode", [""])[0]
-    if contest_id != str(config["contest_id"]) or group_code != str(config["group_code"]):
-        return failed_json(403, "This server is not configured for the requested contest.")
+    if not re.fullmatch(r"\d{1,9}", contest_id):
+        return failed_json(400, "A valid Codeforces contest ID is required.")
+    configured = (contest_id == str(config.get("contest_id", ""))
+                  and group_code == str(config.get("group_code", ""))
+                  and config.get("api_key") and config.get("api_secret"))
+    restricted = bool(group_code) or query.get("auth", ["false"])[0] == "true"
+    if restricted and not configured:
+        return failed_json(403, "Enter Codeforces API credentials for this private contest.")
 
     try:
         count = max(1, min(500, int(query.get("count", ["200"])[0])))
@@ -360,14 +378,16 @@ def fetch_codeforces_standings(
     show_unofficial = query.get("showUnofficial", ["true"])[0].lower() == "true"
     participant_types = "CONTESTANT,OUT_OF_COMPETITION" if show_unofficial else "CONTESTANT"
     params = {
-        "asManager": "true",
         "contestId": contest_id,
         "count": str(count),
         "from": "1",
-        "groupCode": group_code,
-        "participantTypes": participant_types,
     }
-    codeforces_url = signed_codeforces_url(config, params)
+    if group_code:
+        params.update(asManager="true", groupCode=group_code, participantTypes=participant_types)
+    else:
+        params["showUnofficial"] = str(show_unofficial).lower()
+    codeforces_url = (signed_codeforces_url(config, params) if configured else
+                      "https://codeforces.com/api/contest.standings?" + urllib.parse.urlencode({"contestId": contest_id}))
     request = urllib.request.Request(
         codeforces_url,
         headers={"Accept": "application/json", "User-Agent": "ICPC-TV-Scoreboard/1.0"},
@@ -384,20 +404,19 @@ def fetch_codeforces_standings(
 
 def opencup_public_config(config: dict[str, Any]) -> dict[str, Any]:
     return {
-        "source": "opencup",
-        "sourceLabel": "OpenCup",
+        "source": "opentrains",
+        "sourceLabel": "OpenTrains",
         "universityAliases": config.get("university_aliases", {}),
         "contestId": None,
         "groupCode": "",
-        "opencupUrl": config.get("opencup_url", ""),
+        "standingsUrl": config.get("opentrains_url") or config.get("opencup_url", ""),
         "authRequired": False,
     }
 
 
 def opencup_query_config(query: dict[str, list[str]]) -> dict[str, Any]:
     return {
-        "source": "opencup",
-        "opencup_url": query.get("url", [""])[0],
+        **({"opentrains_url": query["url"][0]} if "url" in query else {}),
     }
 
 
@@ -405,31 +424,63 @@ def fetch_opencup_standings(
     config: dict[str, Any],
     query: dict[str, list[str]],
 ) -> tuple[int, str, bytes]:
-    source_url = str(config.get("opencup_url") or query.get("url", [""])[0])
+    source_url = str(config.get("opentrains_url") or config.get("opencup_url") or query.get("url", [""])[0])
+    return fetch_html_standings(source_url, "OpenTrains", parse_opencup_standings)
+
+
+def domjudge_public_config(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source": "domjudge",
+        "sourceLabel": "DOMjudge",
+        "universityAliases": config.get("university_aliases", {}),
+        "standingsUrl": config.get("domjudge_url", ""),
+        "contestId": None,
+        "groupCode": "",
+        "authRequired": False,
+    }
+
+
+def domjudge_query_config(query: dict[str, list[str]]) -> dict[str, Any]:
+    return {"domjudge_url": query["url"][0]} if "url" in query else {}
+
+
+def fetch_domjudge_standings(
+    config: dict[str, Any],
+    query: dict[str, list[str]],
+) -> tuple[int, str, bytes]:
+    source_url = str(config.get("domjudge_url") or query.get("url", [""])[0])
+    return fetch_html_standings(source_url, "DOMjudge", parse_domjudge_standings)
+
+
+def fetch_html_standings(
+    source_url: str,
+    label: str,
+    parser: Callable[[str, str], dict[str, Any]],
+) -> tuple[int, str, bytes]:
     parsed_url = urllib.parse.urlparse(source_url)
     if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
-        return failed_json(400, "A valid OpenCup standings URL is required.")
-    request = urllib.request.Request(
-        source_url,
-        headers={"Accept": "text/html,*/*;q=0.8", "User-Agent": "ICPC-TV-Scoreboard/1.0"},
-    )
+        return failed_json(400, f"A valid {label} standings URL is required.")
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
-            raw = response.read()
-            charset = response.headers.get_content_charset() or "utf-8"
-        page = raw.decode(charset, errors="replace")
-        payload = parse_opencup_standings(page, source_url)
+        page = read_public_html(source_url)
+        payload = parser(page, source_url)
         return 200, "application/json; charset=utf-8", json_bytes(payload)
     except urllib.error.HTTPError as error:
-        return failed_json(error.code, f"OpenCup returned HTTP {error.code}")
-    except (urllib.error.URLError, TimeoutError) as error:
+        return failed_json(error.code, f"{label} returned HTTP {error.code}")
+    except (OSError, http.client.HTTPException) as error:
         reason = getattr(error, "reason", str(error))
-        return failed_json(502, f"OpenCup request failed: {reason}")
-    except (UnicodeError, ValueError) as error:
-        return failed_json(502, f"OpenCup parse failed: {error}")
+        return failed_json(502, f"{label} request failed: {reason}")
+    except (UnicodeError, ValueError, LookupError) as error:
+        return failed_json(502, f"{label} parse failed: {error}")
 
 
 STANDINGS_SOURCES: dict[str, StandingsSource] = {
+    "domjudge": StandingsSource(
+        label="DOMjudge",
+        required_config=("domjudge_url",),
+        public_config=domjudge_public_config,
+        fetch=fetch_domjudge_standings,
+        query_config=domjudge_query_config,
+    ),
     "codeforces": StandingsSource(
         label="Codeforces",
         required_config=("api_key", "api_secret", "contest_id", "group_code"),
@@ -437,14 +488,24 @@ STANDINGS_SOURCES: dict[str, StandingsSource] = {
         fetch=fetch_codeforces_standings,
         query_config=codeforces_query_config,
     ),
-    "opencup": StandingsSource(
-        label="OpenCup",
-        required_config=("opencup_url",),
+    "opentrains": StandingsSource(
+        label="OpenTrains",
+        required_config=("opentrains_url",),
         public_config=opencup_public_config,
         fetch=fetch_opencup_standings,
         query_config=opencup_query_config,
     ),
 }
+
+
+def app_public_config(config: dict[str, Any]) -> dict[str, Any]:
+    source = normalize_source(config.get("source"))
+    defaults = {key: adapter.public_config(config) for key, adapter in STANDINGS_SOURCES.items()}
+    return {
+        **defaults[source],
+        "defaultSource": source if config.get("source") else None,
+        "sources": defaults,
+    }
 
 
 class ScoreboardHandler(BaseHTTPRequestHandler):
@@ -483,8 +544,7 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
             except (RuntimeError, json.JSONDecodeError) as error:
                 self.send_json(503, {"status": "FAILED", "comment": str(error)})
                 return
-            adapter = STANDINGS_SOURCES[normalize_source(config.get("source"))]
-            public_config = json.dumps(adapter.public_config(config), separators=(",", ":")).replace("<", "\\u003c")
+            public_config = json.dumps(app_public_config(config), separators=(",", ":")).replace("<", "\\u003c")
             page = INDEX_PATH.read_text(encoding="utf-8").replace(
                 '<script id="serverConfig" type="application/json">null</script>',
                 f'<script id="serverConfig" type="application/json">{public_config}</script>',

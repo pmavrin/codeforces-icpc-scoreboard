@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: domjudge-scoreboard
+    runtime: python
+    plan: free
+    buildCommand: python3 -m py_compile server.py domjudge.py
+    startCommand: python3 server.py
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: SCOREBOARD_SOURCE
+        value: domjudge
+      - key: DOMJUDGE_STANDINGS_URL
+        value: https://www.domjudge.org/demoweb/public
+      - key: UNIVERSITY_ALIASES
+        value: >-
+          {"University of Cambridge":"Cambridge","University of Oxford":"Oxford","Karlsruhe Institute of Technology":"KIT","Hasso Plattner Institute":"HPI"}

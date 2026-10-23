@@ -1,100 +1,96 @@
-# ICPC TV Scoreboard
+# ICPC Scoreboard
 
-The included Python server keeps Codeforces API credentials off the TV and signs group-contest requests server-side.
+One TV scoreboard for Codeforces, OpenTrains / OpenCup, and DOMjudge.
 
-## Start the display
+## Run locally
 
-1. Configure `scoreboard.config.json`. Safe templates are available in `examples/scoreboard.config.codeforces.example.json` for Codeforces and `examples/scoreboard.config.opencup.example.json` for OpenCup.
-2. Start the server:
-
-   ```bash
-   python3 server.py
-   ```
-
-3. On the TV, open:
-
-   ```text
-   http://SERVER_IP:8080/
-   ```
-
-The configured contest opens immediately and refreshes every 30 seconds. No contest or credential entry is needed on the TV. The first standings page stays visible for two minutes; subsequent pages rotate every 30 seconds.
-The table adapts to the screen width; when a contest has more problem columns than can remain readable, it automatically rotates through labeled problem groups while keeping rank, team, solved, and penalty visible.
-
-## Use an OpenCup standings page
-
-The same display can read an OpenCup-style HTML standings page, for example `https://pafos25.opencup.org/resday8`.
-Copy `examples/scoreboard.config.opencup.example.json` to `scoreboard.config.json` or set these values:
-
-```json
-{
-  "source": "opencup",
-  "opencup_url": "https://pafos25.opencup.org/resday8",
-  "university_aliases": {
-    "Delft University of Technology": "TU Delft",
-    "Kharkiv National University of Radio Electronics": "KNURE",
-    "University of Wroclaw": "UWr"
-  },
-  "host": "0.0.0.0",
-  "port": 8080
-}
+```bash
+python3 server.py
 ```
 
-Then start the server as usual. The server fetches the HTML page, parses the `.standings` table, and serves it to the existing TV UI through `/api/standings`.
-For team names shaped like `<university>: <team name> (participants)`, the display shows `<short university>: <team name>` on the main line and participants below it. Add more entries to `university_aliases` when a university needs a shorter on-screen name.
+Open http://localhost:8080/, choose a data source, and enter its contest or scoreboard URL. No configuration file or API key is required to start the application.
 
-## Add another judging system
+- **Codeforces:** contest ID or URL, optional group code, and private/Gym credentials.
+- **OpenTrains:** public HTML standings URL, including Pafos/OpenCup pages.
+- **DOMjudge:** public ICPC scoreboard URL or static HTML export.
 
-Standings providers are registered in `server.py` through `STANDINGS_SOURCES`. A new provider needs:
+Settings remember the selected source and its last URL in this browser. The address bar contains a shareable contest link. API secrets are never included in that link. University aliases are edited under **University names**, stored in this browser, and apply to all sources. Invalid alias JSON is rejected before changing the contest.
 
-- a parser or API client that returns the same standings shape as Codeforces: `contest`, `problems`, and `rows`;
-- a `public_config` function for non-secret browser settings such as `source` and `sourceLabel`;
-- a `fetch` function that returns `(status, content_type, payload_bytes)`;
-- one entry in `STANDINGS_SOURCES`.
+The display refreshes every 30 seconds, shows 10 teams per page, and rotates problem groups when necessary. First-to-solve and pending/frozen submissions retain their distinct styles. Opening settings pauses automatic refresh; switching sources cancels the old request and clears old highlights.
 
-The browser already renders that shared shape, so most new systems should only need server-side adapter code.
+## Permanent links
 
-## Deploy on Render
+```text
+/?source=codeforces&contest=2045
+/?source=opentrains&url=https%3A%2F%2Fpafos25.opencup.org%2Fresday8
+/?source=domjudge&url=https%3A%2F%2Fwww.domjudge.org%2Fdemoweb%2Fpublic
+```
 
-The repository includes a Render Blueprint in `render.yaml`. It is ready for the Pafos/OpenCup standings page by default.
+Legacy `source=opencup`, `opencup_url`, and `OPENCUP_STANDINGS_URL` remain supported.
 
-1. Push the repository to GitHub, GitLab, or Bitbucket. Do not add `scoreboard.config.json`.
-2. In the [Render Dashboard](https://dashboard.render.com/), choose **New → Blueprint** and connect the repository.
-3. Create the Blueprint and wait for the health check to pass.
-4. Open the generated `https://…onrender.com/` URL on the TV.
+## Optional server defaults
 
-The default `render.yaml` configures:
+Configuration is optional. Set defaults in the git-ignored `scoreboard.config.json`, or select a file with `SCOREBOARD_CONFIG`:
 
-- `SCOREBOARD_SOURCE=opencup`
-- `OPENCUP_STANDINGS_URL=https://pafos25.opencup.org/resday8`
-- `UNIVERSITY_ALIASES` for the universities currently present in that standings page
-- the Python start command and `/health` check
+```bash
+SCOREBOARD_CONFIG=examples/scoreboard.config.domjudge.example.json python3 server.py
+```
 
-For a Codeforces deployment, use `examples/render.codeforces.yaml` as the starting point for `render.yaml`. During the Blueprint setup, Render will ask for `CODEFORCES_API_KEY` and `CODEFORCES_API_SECRET`; set `CODEFORCES_CONTEST_ID` and `CODEFORCES_GROUP_CODE` for the target contest.
+Examples are available for `codeforces`, `opentrains`, and `domjudge` in `examples/scoreboard.config.<source>.example.json`. The older OpenCup example remains compatible.
 
-Additional Render Blueprint examples are available in:
-
-- `examples/render.opencup.yaml`
-- `examples/render.codeforces.yaml`
-
-Render supplies `PORT` automatically. The server also supports the following environment variables, which take precedence over `scoreboard.config.json`:
+Environment variables override file values:
 
 | Variable | Purpose |
 | --- | --- |
-| `CODEFORCES_API_KEY` | Codeforces API key owned by a group manager |
-| `CODEFORCES_API_SECRET` | Matching Codeforces API secret |
-| `CODEFORCES_CONTEST_ID` | Contest ID |
-| `CODEFORCES_GROUP_CODE` | Group code |
-| `SCOREBOARD_SOURCE` | `codeforces` or `opencup`; defaults to `codeforces` |
-| `OPENCUP_STANDINGS_URL` | OpenCup HTML standings URL when `SCOREBOARD_SOURCE=opencup` |
-| `UNIVERSITY_ALIASES` | Optional JSON object mapping full university names to display aliases |
-| `PORT` | HTTP port; supplied by Render |
-| `HOST` | Bind address; defaults to `0.0.0.0` |
+| `SCOREBOARD_SOURCE` | Default source: `codeforces`, `opentrains`, or `domjudge` |
+| `OPENTRAINS_STANDINGS_URL` | Default OpenTrains URL |
+| `DOMJUDGE_STANDINGS_URL` | Default DOMjudge URL |
+| `CODEFORCES_CONTEST_ID` | Default Codeforces contest |
+| `CODEFORCES_GROUP_CODE` | Default Codeforces group |
+| `CODEFORCES_API_KEY`, `CODEFORCES_API_SECRET` | Optional server credentials, restricted to the configured contest and group |
+| `UNIVERSITY_ALIASES` | JSON object mapping full university names to display aliases |
+| `HOST`, `PORT` | Bind address and port; defaults: `0.0.0.0:8080` |
 
-## Security
+## Codeforces authentication
 
-- `scoreboard.config.json` is git-ignored and should remain readable only by the server account.
-- The server only exposes `/`, `/index.html`, `/health`, and `/api/standings`; it does not serve the config file or arbitrary workspace files.
-- The proxy is locked to the configured contest and group, so it cannot be used to query other private contests.
-- The API secret is used only to calculate Codeforces request signatures and is never returned to browsers.
+Public contests use the anonymous API through the server, with a direct-browser fallback if necessary. Private and Gym contests can use API credentials entered in settings; the browser signs those requests and sends them directly to Codeforces. Credentials stay in session storage unless **Remember credentials on this display** is checked.
 
-Static hosting still works for public contests. Private group contests on static hosting fall back to the credential form in `index.html`.
+Alternatively, configure server credentials for a particular contest and group. Those credentials can never be used to query a different contest through this server. Public deployments do not need server credentials.
+
+## HTML sources
+
+The OpenTrains adapter reads the OpenCup-style `.standings` table, including first-to-solve and frozen cells.
+
+The DOMjudge adapter has been checked against [the official demo](https://www.domjudge.org/demoweb/public) (version 10 development) and [FSU](https://bastion.cs.fsu.edu/public) (7.3.3). It preserves rank, solved count, penalty, solve time, rejected attempts, first-to-solve, and pending submissions. `1 + 2 tries` means one rejected and two pending attempts, displayed as `?2`. Universities are separate from team names; participant details are not fetched. Team IDs remain stable when ranks change.
+
+Static DOMjudge exports may omit clock metadata; then the clock shows `--:--:--`. Login-protected pages, non-ICPC scoring, and custom HTML layouts are not supported.
+
+HTML fetching accepts only public HTTP/HTTPS URLs on ports 80/443, checks DNS and redirects, connects to validated public IPs, and limits responses to 8 MiB. Local files, embedded URL credentials, loopback, private networks, and cloud metadata addresses are rejected.
+
+## Deploy to Render
+
+`render.yaml` defines a free Python web service named `icpc-scoreboard`. It runs tests before deployment and uses `/health` for readiness. No contest-specific environment variables or secret files are needed.
+
+Create a Render Web Service from this repository:
+
+- Build: `python3 -m unittest discover -s tests -v`
+- Start: `python3 server.py`
+- Health check: `/health`
+- Instance type: Free
+- Name: `icpc-scoreboard`
+
+Render supplies `PORT`. The requested address is https://icpc-scoreboard.onrender.com/ (subject to name availability). Free services can take a while to wake after inactivity.
+
+For fixed-contest deployments, provider-specific Blueprint examples are also available in `examples/render.<source>.yaml`.
+
+## Add a source
+
+Providers are registered in `server.py` through `STANDINGS_SOURCES`. Each adapter supplies public defaults, URL-query settings, and a fetch function returning `(status, content_type, payload_bytes)`. Parsers return the common `contest`, `problems`, and `rows` shape. Add a matching option and label to the setup form for a new provider.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Fixtures cover DOMjudge versions, freezes, empty tables, stable team IDs, provider selection, credential boundaries, and public-URL restrictions.

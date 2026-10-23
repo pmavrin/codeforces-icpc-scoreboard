@@ -1,0 +1,11 @@
+{
+  "source": "opentrains",
+  "opentrains_url": "https://pafos25.opencup.org/resday8",
+  "university_aliases": {
+    "Delft University of Technology": "TU Delft",
+    "Karlsruhe Institute of Technology": "KIT",
+    "University of Maryland": "Maryland"
+  },
+  "host": "0.0.0.0",
+  "port": 8080
+}

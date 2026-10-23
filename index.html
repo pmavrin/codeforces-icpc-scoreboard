@@ -595,7 +595,7 @@
       padding: 0;
       overflow: auto;
       border: 1px solid rgba(173, 200, 235, .2);
-      border-radius: 1.35rem;
+      border-radius: .5rem;
       color: var(--text);
       background: #101b2b;
       box-shadow: 0 2rem 7rem rgba(0, 0, 0, .55);
@@ -619,8 +619,8 @@
     dialog h2 {
       margin: .55rem 0 .7rem;
       color: white;
-      font-size: 2rem;
-      letter-spacing: -.045em;
+      font-size: 1.5rem;
+      letter-spacing: 0;
     }
 
     dialog p { margin: 0 0 1.5rem; color: #9eacc0; line-height: 1.55; }
@@ -633,25 +633,27 @@
       font-weight: 740;
     }
 
-    input {
+    input, select, textarea {
       width: 100%;
       height: 3.65rem;
       padding: 0 1rem;
       border: 1px solid rgba(173, 200, 235, .18);
-      border-radius: .8rem;
+      border-radius: .4rem;
       color: white;
       background: #0a1422;
       font-size: 1.1rem;
     }
 
     .field-help { margin-top: .55rem; color: #6f8199; font-size: .75rem; }
+    .setup-field { margin-top: 1rem; }
+    .setup-field textarea { height: 9rem; padding: .75rem; font: .85rem monospace; resize: vertical; }
+    .setup-field summary { cursor: pointer; color: #c9d4e2; font-weight: 700; margin-bottom: .7rem; }
+    [hidden] { display: none !important; }
 
     .credentials-card {
       margin-top: 1.2rem;
-      padding: 1rem;
-      border: 1px solid rgba(93, 169, 255, .22);
-      border-radius: .9rem;
-      background: rgba(93, 169, 255, .065);
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
     }
 
     .credentials-card[hidden] { display: none; }
@@ -823,14 +825,27 @@
   <dialog id="setupDialog">
     <form id="setupForm" class="dialog-content" method="dialog">
       <div class="dialog-kicker">Display setup</div>
-      <h2>Choose a Codeforces contest</h2>
-      <p>Paste a contest ID or its full Codeforces URL. The display will remember it on this TV.</p>
-      <label for="contestInput">Contest ID or URL</label>
-      <input id="contestInput" type="text" inputmode="url" autocomplete="off" placeholder="e.g. 2045 or a group contest URL" required>
-      <div class="field-help">Tip: add <strong>?contest=2045</strong> to this page’s URL for a permanent display link.</div>
+      <h2>Scoreboard settings</h2>
+      <div class="setup-field">
+        <label for="sourceSelect">Data source</label>
+        <select id="sourceSelect">
+          <option value="codeforces">Codeforces</option>
+          <option value="opentrains">OpenTrains</option>
+          <option value="domjudge">DOMjudge</option>
+        </select>
+      </div>
+      <div class="setup-field">
+        <label for="contestInput">Contest ID or URL</label>
+        <input id="contestInput" type="text" inputmode="url" autocomplete="off" placeholder="e.g. 2045 or a group contest URL" required>
+      </div>
+      <div id="codeforcesOptions" class="setup-field">
+        <label for="groupInput">Group code (optional)</label>
+        <input id="groupInput" type="text" autocomplete="off">
+        <label class="remember-row"><input id="useAuth" type="checkbox">Private contest / Gym</label>
+      </div>
       <section id="credentialsPanel" class="credentials-card" hidden>
         <div class="credentials-title">Private group / Gym access</div>
-        <p class="credentials-copy">Server credentials are used automatically when configured. Otherwise, <a href="https://codeforces.com/settings/api" target="_blank" rel="noreferrer">create a Codeforces API key</a> and enter it here as a fallback. Your secret stays in this browser and is only used to sign requests.</p>
+        <p class="credentials-copy"><a href="https://codeforces.com/settings/api" target="_blank" rel="noreferrer">Codeforces API keys</a> stay in this browser. Configured server credentials apply only to their designated contest.</p>
         <div class="credentials-grid">
           <div>
             <label for="apiKeyInput">API key</label>
@@ -846,6 +861,11 @@
           Remember credentials on this display
         </label>
       </section>
+      <details class="setup-field">
+        <summary>University names</summary>
+        <label for="aliasesInput">Full name to short name (JSON)</label>
+        <textarea id="aliasesInput" spellcheck="false" placeholder='{"Delft University of Technology": "TU Delft"}'></textarea>
+      </details>
       <div id="dialogError" class="dialog-error" role="alert"></div>
       <div class="dialog-actions">
         <button id="previewButton" class="secondary-button" type="button">View preview</button>
@@ -872,21 +892,26 @@
         showUnofficial: params.get('unofficial') !== 'false'
       };
 
-      const initialSource = String(params.get('source') || serverConfig.source || 'codeforces').toLowerCase();
-      const initialOpenCupUrl = params.get('url') || String(serverConfig.opencupUrl || '') || localStorage.getItem('icpc-opencup-url') || '';
-      const explicitContestValue = params.get('contest') || String(serverConfig.contestId || '');
-      const initialContestValue = explicitContestValue || localStorage.getItem('icpc-contest-id');
-      const initialGroupCode = params.get('group') || String(serverConfig.groupCode || '') || extractGroupCode(initialContestValue) || (!explicitContestValue ? localStorage.getItem('icpc-group-code') : '') || '';
+      const sourceLabels = { codeforces: 'Codeforces', opentrains: 'OpenTrains', domjudge: 'DOMjudge' };
+      function canonicalSource(value) { return value === 'opencup' ? 'opentrains' : (sourceLabels[value] ? value : 'codeforces'); }
+      const initialSource = canonicalSource(String(params.get('source') || (params.has('contest') ? 'codeforces' : '') || localStorage.getItem('icpc-source') || serverConfig.source || 'codeforces').toLowerCase());
+      const sourceDefaults = serverConfig.sources || { [canonicalSource(serverConfig.source)]: serverConfig };
+      const initialDefaults = sourceDefaults[initialSource] || {};
+      const initialStandingsUrl = params.get('url') || localStorage.getItem(`icpc-${initialSource}-url`) || (initialSource === 'opentrains' ? localStorage.getItem('icpc-opencup-url') : '') || String(initialDefaults.standingsUrl || initialDefaults.opencupUrl || '');
+      const savedContestValue = localStorage.getItem('icpc-contest-id');
+      const initialContestValue = params.get('contest') || savedContestValue || String(initialDefaults.contestId || '');
+      const usesServerContest = !params.has('contest') && !savedContestValue;
+      const initialGroupCode = params.get('group') || extractGroupCode(initialContestValue) || (!params.has('contest') ? (savedContestValue ? localStorage.getItem('icpc-group-code') : initialDefaults.groupCode) : '') || '';
       const storedApiKey = sessionStorage.getItem('icpc-api-key') || localStorage.getItem('icpc-api-key') || '';
       const storedApiSecret = sessionStorage.getItem('icpc-api-secret') || localStorage.getItem('icpc-api-secret') || '';
       const state = {
         source: initialSource || 'codeforces',
-        sourceLabel: String(serverConfig.sourceLabel || (initialSource === 'opencup' ? 'OpenCup' : 'Codeforces')),
-        universityAliases: serverConfig.universityAliases || {},
-        opencupUrl: initialOpenCupUrl,
+        sourceLabel: sourceLabels[initialSource],
+        universityAliases: readSavedAliases(),
+        standingsUrl: initialStandingsUrl,
         contestId: extractContestId(initialContestValue),
         groupCode: initialGroupCode,
-        authRequired: serverConfig.authRequired === true || params.get('auth') === '1' || Boolean(initialGroupCode) || isRestrictedContestUrl(initialContestValue) || (!explicitContestValue && localStorage.getItem('icpc-auth-required') === 'true'),
+        authRequired: initialSource === 'codeforces' && ((usesServerContest && initialDefaults.authRequired === true) || params.get('auth') === '1' || Boolean(initialGroupCode) || isRestrictedContestUrl(initialContestValue) || (!params.has('contest') && Boolean(savedContestValue) && localStorage.getItem('icpc-auth-required') === 'true')),
         apiKey: storedApiKey,
         apiSecret: storedApiSecret,
         rememberCredentials: Boolean(localStorage.getItem('icpc-api-key') && localStorage.getItem('icpc-api-secret')),
@@ -901,6 +926,8 @@
         refreshTimer: null,
         clockTimer: null,
         loading: false,
+        requestId: 0,
+        controller: null,
         demo: false,
         lastUpdated: null
       };
@@ -913,6 +940,7 @@
         scoreboard: document.querySelector('.scoreboard'),
         syncStatus: $('#syncStatus'), syncText: $('#syncText'), pageDots: $('#pageDots'),
         setupDialog: $('#setupDialog'), setupForm: $('#setupForm'), contestInput: $('#contestInput'),
+        sourceSelect: $('#sourceSelect'), groupInput: $('#groupInput'), useAuth: $('#useAuth'), aliasesInput: $('#aliasesInput'),
         credentialsPanel: $('#credentialsPanel'), apiKeyInput: $('#apiKeyInput'), apiSecretInput: $('#apiSecretInput'),
         rememberCredentials: $('#rememberCredentials'),
         dialogError: $('#dialogError'), refreshButton: $('#refreshButton'), settingsButton: $('#settingsButton'),
@@ -921,6 +949,14 @@
       els.provider = document.querySelector('.provider');
 
       $('#refreshSeconds').textContent = String(config.refreshMs / 1000);
+
+      function readSavedAliases() {
+        try {
+          const aliases = JSON.parse(localStorage.getItem('icpc-university-aliases') || 'null');
+          if (aliases && typeof aliases === 'object' && !Array.isArray(aliases)) return aliases;
+        } catch (_) {}
+        return serverConfig.universityAliases || {};
+      }
 
       function extractContestId(value) {
         if (!value) return null;
@@ -939,14 +975,14 @@
       }
 
       function contestDisplayValue() {
-        if (state.source === 'opencup') return state.opencupUrl || '';
+        if (state.source !== 'codeforces') return state.standingsUrl || '';
         if (!state.contestId) return '';
         if (state.groupCode) return `https://codeforces.com/group/${state.groupCode}/contest/${state.contestId}`;
         return state.contestId;
       }
 
       function showCredentialsFor(value) {
-        const visible = state.authRequired || isRestrictedContestUrl(value);
+        const visible = els.sourceSelect.value === 'codeforces' && (els.useAuth.checked || els.groupInput.value.trim() || isRestrictedContestUrl(value));
         els.credentialsPanel.hidden = !visible;
       }
 
@@ -1049,6 +1085,15 @@
 
       function participantDisplay(row) {
         const fullName = participantName(row);
+        if (Object.prototype.hasOwnProperty.call(row.party, 'university')) {
+          const fullUniversity = row.party.university;
+          const university = state.universityAliases[fullUniversity] || fullUniversity;
+          return {
+            name: university ? `${university}: ${fullName}` : fullName,
+            details: participantMembers(row),
+            title: fullUniversity ? `${fullUniversity}: ${fullName}` : fullName
+          };
+        }
         const structured = row.party.teamName ? splitStructuredTeamName(row.party.teamName) : null;
         if (structured) {
           const university = structured.university ? state.universityAliases[structured.university] || structured.university : '';
@@ -1083,7 +1128,15 @@
       }
 
       function updateClock() {
-        if (!state.contest) return;
+        if (!state.contest) {
+          els.contestTimer.textContent = '--:--:--';
+          return;
+        }
+        if (state.contest.timingAvailable === false) {
+          els.timerLabel.textContent = 'Contest time';
+          els.contestTimer.textContent = '--:--:--';
+          return;
+        }
 
         const start = Number(state.contest.startTimeSeconds || 0);
         const duration = Number(state.contest.durationSeconds || 0);
@@ -1106,7 +1159,10 @@
       function setPhase(phase) {
         const normalized = String(phase || '').toUpperCase();
         els.phasePill.className = 'phase-pill';
-        if (normalized === 'FINISHED') {
+        if (!normalized) {
+          els.phasePill.classList.add('pending');
+          els.phasePill.textContent = 'Setup';
+        } else if (normalized === 'FINISHED') {
           els.phasePill.classList.add('finished');
           els.phasePill.textContent = 'Final';
         } else if (normalized === 'BEFORE') {
@@ -1384,7 +1440,7 @@
           ? 'Demo contest'
           : state.source !== 'codeforces'
             ? `${state.sourceLabel} standings`
-            : `Codeforces #${contest?.id || state.contestId}`;
+            : state.contestId || contest?.id ? `Codeforces #${contest?.id || state.contestId}` : 'Codeforces';
         els.teamCount.textContent = `${state.rows.length.toLocaleString()} ${state.rows.length === 1 ? 'team' : 'teams'}`;
         els.provider.innerHTML = `Data from ${state.sourceLabel} · refreshes every <span id="refreshSeconds">${config.refreshMs / 1000}</span>s`;
         els.demoBadge.classList.toggle('visible', state.demo);
@@ -1433,30 +1489,33 @@
       }
 
       async function fetchStandings({ silent = false } = {}) {
-        if ((state.source === 'codeforces' && !state.contestId) || (state.source === 'opencup' && !state.opencupUrl) || state.loading) return;
+        if ((state.source === 'codeforces' ? !state.contestId : !state.standingsUrl) || state.loading) return;
         state.loading = true;
         if (!silent) setSync('loading', 'Updating standings…');
         els.refreshButton.disabled = true;
 
         const controller = new AbortController();
+        state.controller = controller;
+        const requestId = ++state.requestId;
         const timeout = setTimeout(() => controller.abort(), 12000);
         try {
           if (state.source !== 'codeforces') {
             const proxyUrl = new URL('api/standings', location.href);
             proxyUrl.search = new URLSearchParams({
               source: state.source,
-              ...(state.opencupUrl ? { url: state.opencupUrl } : {})
+              ...(state.standingsUrl ? { url: state.standingsUrl } : {})
             });
             const response = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
             const data = await response.json().catch(() => null);
+            if (requestId !== state.requestId) return;
             if (!response.ok || data?.status !== 'OK') {
               throw new Error(data?.comment || `${state.sourceLabel} returned HTTP ${response.status}`);
             }
             applyData(data);
             state.lastUpdated = new Date();
             localStorage.setItem('icpc-source', state.source);
-            if (state.opencupUrl) localStorage.setItem('icpc-opencup-url', state.opencupUrl);
-            try { localStorage.setItem(`icpc-standings-${state.source}-${state.opencupUrl || 'configured'}`, JSON.stringify(data)); } catch (_) {}
+            if (state.standingsUrl) localStorage.setItem(`icpc-${state.source}-url`, state.standingsUrl);
+            try { localStorage.setItem(`icpc-standings-${state.source}-${state.standingsUrl || 'configured'}`, JSON.stringify(data)); } catch (_) {}
             setSync('', `Updated ${formatClock(state.lastUpdated)}`);
             els.dialogError.textContent = '';
             if (els.setupDialog.open) els.setupDialog.close();
@@ -1478,47 +1537,49 @@
               : { showUnofficial: config.showUnofficial })
           };
           let response;
-          if (state.authRequired) {
+          if (state.authRequired && state.apiKey && state.apiSecret) {
+            const endpoint = await authenticatedApiUrl('contest.standings', signedParams);
+            response = await fetch(endpoint, { signal: controller.signal, cache: 'no-store' });
+          } else {
             const proxyUrl = new URL('api/standings', location.href);
             proxyUrl.search = new URLSearchParams({
+              source: 'codeforces',
               contestId: state.contestId,
               groupCode: state.groupCode,
+              auth: state.authRequired,
               count: config.count,
               showUnofficial: config.showUnofficial
             });
             response = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
-            if (response.status === 404) {
-              if (!state.apiKey || !state.apiSecret) {
-                throw new Error('Server credentials are not configured. Enter API credentials below or run the included scoreboard server.');
-              }
-              const endpoint = await authenticatedApiUrl('contest.standings', signedParams);
+            if (!state.authRequired && [403, 404, 502].includes(response.status)) {
+              const endpoint = `https://codeforces.com/api/contest.standings?contestId=${encodeURIComponent(state.contestId)}`;
               response = await fetch(endpoint, { signal: controller.signal, cache: 'no-store' });
             }
-          } else {
-            const endpoint = `https://codeforces.com/api/contest.standings?contestId=${encodeURIComponent(state.contestId)}`;
-            response = await fetch(endpoint, { signal: controller.signal, cache: 'no-store' });
           }
           const data = await response.json().catch(() => null);
+          if (requestId !== state.requestId) return;
           if (!response.ok || data?.status !== 'OK') {
             throw new Error(data?.comment || `Codeforces returned HTTP ${response.status}`);
           }
           applyData(data);
           state.lastUpdated = new Date();
+          localStorage.setItem('icpc-source', state.source);
           localStorage.setItem('icpc-contest-id', state.contestId);
           localStorage.setItem('icpc-auth-required', String(state.authRequired));
           if (state.groupCode) localStorage.setItem('icpc-group-code', state.groupCode);
           else localStorage.removeItem('icpc-group-code');
           if (state.authRequired && state.apiKey && state.apiSecret) persistCredentials();
-          try { localStorage.setItem(`icpc-standings-${state.contestId}`, JSON.stringify(data)); } catch (_) {}
+          try { localStorage.setItem(standingsCacheKey(), JSON.stringify(data)); } catch (_) {}
           setSync('', `Updated ${formatClock(state.lastUpdated)}`);
           els.dialogError.textContent = '';
           if (els.setupDialog.open) els.setupDialog.close();
         } catch (error) {
-          let message = error.name === 'AbortError' ? 'Codeforces did not respond in time' : error.message;
+          if (requestId !== state.requestId) return;
+          let message = error.name === 'AbortError' ? `${state.sourceLabel} did not respond in time` : error.message;
           if (state.groupCode && /Contest with id .* not found/i.test(message) && !/apiKey|signature|asManager/i.test(message)) {
             message = 'This API key cannot access the group standings. Codeforces requires its account to be a manager of the group contest.';
           }
-          const cached = localStorage.getItem(`icpc-standings-${state.contestId}`);
+          const cached = localStorage.getItem(standingsCacheKey());
           if (!state.rows.length && cached) {
             try {
               applyData(JSON.parse(cached));
@@ -1534,49 +1595,75 @@
           }
         } finally {
           clearTimeout(timeout);
-          state.loading = false;
-          els.refreshButton.disabled = false;
+          if (requestId === state.requestId) {
+            state.loading = false;
+            state.controller = null;
+            els.refreshButton.disabled = false;
+          }
         }
+      }
+
+      function standingsCacheKey() {
+        return `icpc-standings-${state.source}-${state.source === 'codeforces' ? `${state.groupCode}:${state.contestId}` : state.standingsUrl || 'configured'}`;
+      }
+
+      function cancelRequest() {
+        state.requestId += 1;
+        state.controller?.abort();
+        state.controller = null;
+        state.loading = false;
+        els.refreshButton.disabled = false;
       }
 
       function scheduleRefresh() {
         clearInterval(state.refreshTimer);
-        state.refreshTimer = setInterval(() => fetchStandings({ silent: false }), config.refreshMs);
+        state.refreshTimer = setInterval(() => {
+          if (!els.setupDialog.open && !state.demo) fetchStandings({ silent: false });
+        }, config.refreshMs);
       }
 
       function useContest(value) {
-        if (state.source === 'opencup') {
-          let parsedUrl;
-          try { parsedUrl = new URL(value); } catch (_) {}
-          if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol)) {
-            els.dialogError.textContent = 'Enter a valid OpenCup standings URL.';
+        const source = els.sourceSelect.value;
+        const id = source === 'codeforces' ? extractContestId(value) : null;
+        let parsedUrl;
+        if (source !== 'codeforces') {
+          try { parsedUrl = new URL(value.trim()); } catch (_) {}
+          if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
+            els.dialogError.textContent = `Enter a public ${sourceLabels[source]} standings URL.`;
             return;
           }
-          state.opencupUrl = parsedUrl.href;
-          state.rows = [];
-          state.problems = [];
-          state.demo = false;
-          clearTimeout(state.pageTimer);
-          state.pageTimer = null;
-          state.currentPage = 0;
-          const url = new URL(location.href);
-          url.searchParams.set('source', 'opencup');
-          url.searchParams.set('url', state.opencupUrl);
-          history.replaceState({}, '', url);
-          els.contestName.textContent = 'Loading OpenCup standings…';
-          fetchStandings();
-          scheduleRefresh();
-          return;
-        }
-        const id = extractContestId(value);
-        if (!id) {
+        } else if (!id) {
           els.dialogError.textContent = 'Enter a valid numeric contest ID or Codeforces contest URL.';
           return;
         }
-        const groupCode = extractGroupCode(value);
-        const authRequired = isRestrictedContestUrl(value) || (id === state.contestId && state.authRequired);
+        let aliases;
+        try {
+          aliases = JSON.parse(els.aliasesInput.value || '{}');
+          if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases) || Object.values(aliases).some((value) => typeof value !== 'string')) throw new Error();
+        } catch (_) {
+          els.dialogError.textContent = 'University names must be a JSON object mapping full names to short names.';
+          return;
+        }
+        const groupCode = source === 'codeforces' ? extractGroupCode(value) || els.groupInput.value.trim() : '';
+        if (groupCode && !/^[A-Za-z0-9]+$/.test(groupCode)) {
+          els.dialogError.textContent = 'Enter a valid Codeforces group code.';
+          return;
+        }
+        const authRequired = source === 'codeforces' && (els.useAuth.checked || Boolean(groupCode) || isRestrictedContestUrl(value));
         const apiKey = els.apiKeyInput.value.trim();
         const apiSecret = els.apiSecretInput.value.trim();
+        if (authRequired && Boolean(apiKey) !== Boolean(apiSecret)) {
+          els.dialogError.textContent = 'Enter both an API key and its secret.';
+          return;
+        }
+        cancelRequest();
+        state.source = source;
+        state.sourceLabel = sourceLabels[source];
+        state.standingsUrl = parsedUrl?.href || '';
+        state.universityAliases = aliases;
+        localStorage.setItem('icpc-university-aliases', JSON.stringify(aliases));
+        localStorage.setItem('icpc-source', source);
+        if (state.standingsUrl) localStorage.setItem(`icpc-${source}-url`, state.standingsUrl);
         state.contestId = id;
         state.groupCode = groupCode;
         state.authRequired = authRequired;
@@ -1585,31 +1672,51 @@
         state.rememberCredentials = els.rememberCredentials.checked;
         state.rows = [];
         state.problems = [];
+        state.contest = null;
+        state.recentSolves.clear();
         state.demo = false;
         clearTimeout(state.pageTimer);
         state.pageTimer = null;
         state.currentPage = 0;
         const url = new URL(location.href);
-        url.searchParams.set('contest', id);
+        for (const key of ['source', 'contest', 'group', 'auth', 'url']) url.searchParams.delete(key);
+        url.searchParams.set('source', source);
+        if (id) url.searchParams.set('contest', id);
+        if (state.standingsUrl) url.searchParams.set('url', state.standingsUrl);
         if (groupCode) url.searchParams.set('group', groupCode);
         else url.searchParams.delete('group');
         if (authRequired) url.searchParams.set('auth', '1');
         else url.searchParams.delete('auth');
         history.replaceState({}, '', url);
-        els.contestName.textContent = `Loading contest #${id}…`;
+        updateSummary();
+        renderPage(true);
+        els.contestName.textContent = `Loading ${state.sourceLabel} standings…`;
         fetchStandings();
         scheduleRefresh();
       }
 
       function showSetup() {
+        cancelRequest();
+        els.sourceSelect.value = state.source;
         els.contestInput.value = contestDisplayValue();
+        els.groupInput.value = state.groupCode;
+        els.useAuth.checked = state.authRequired;
+        els.aliasesInput.value = JSON.stringify(state.universityAliases, null, 2);
         els.apiKeyInput.value = state.apiKey;
         els.apiSecretInput.value = state.apiSecret;
         els.rememberCredentials.checked = state.rememberCredentials;
-        showCredentialsFor(els.contestInput.value);
+        updateSourceFields();
         els.dialogError.textContent = '';
         if (!els.setupDialog.open) els.setupDialog.showModal();
         setTimeout(() => els.contestInput.focus(), 50);
+      }
+
+      function updateSourceFields() {
+        const htmlSource = els.sourceSelect.value !== 'codeforces';
+        $('#codeforcesOptions').hidden = htmlSource;
+        els.setupDialog.querySelector('label[for="contestInput"]').textContent = htmlSource ? 'Scoreboard URL' : 'Contest ID or URL';
+        els.contestInput.placeholder = htmlSource ? 'https://example.org/public' : '2045 or https://codeforces.com/group/.../contest/...';
+        showCredentialsFor(els.contestInput.value);
       }
 
       function demoData() {
@@ -1652,7 +1759,25 @@
         useContest(els.contestInput.value);
       });
       els.contestInput.addEventListener('input', () => showCredentialsFor(els.contestInput.value));
+      els.groupInput.addEventListener('input', () => showCredentialsFor(els.contestInput.value));
+      els.useAuth.addEventListener('change', () => showCredentialsFor(els.contestInput.value));
+      els.sourceSelect.addEventListener('change', () => {
+        const source = els.sourceSelect.value;
+        const defaults = sourceDefaults[source] || {};
+        if (source === state.source) {
+          els.contestInput.value = contestDisplayValue();
+        } else if (source === 'codeforces') {
+          els.contestInput.value = localStorage.getItem('icpc-contest-id') || defaults.contestId || '';
+          els.groupInput.value = localStorage.getItem('icpc-group-code') || defaults.groupCode || '';
+          els.useAuth.checked = localStorage.getItem('icpc-auth-required') === 'true' || defaults.authRequired === true;
+        } else {
+          els.contestInput.value = localStorage.getItem(`icpc-${source}-url`) || defaults.standingsUrl || '';
+        }
+        els.dialogError.textContent = '';
+        updateSourceFields();
+      });
       els.previewButton.addEventListener('click', () => {
+        cancelRequest();
         applyData(demoData(), { demo: true });
         els.setupDialog.close();
         setSync('', 'Preview data · choose a contest when ready');
@@ -1667,21 +1792,22 @@
       });
       window.addEventListener('resize', () => renderPage(false));
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && !state.demo && (state.contestId || state.opencupUrl)) fetchStandings();
+        if (!document.hidden && !els.setupDialog.open && !state.demo && (state.contestId || state.standingsUrl)) fetchStandings();
       });
 
       state.clockTimer = setInterval(updateClock, 1000);
       updateClock();
-      if (state.source !== 'codeforces' && (state.source !== 'opencup' || state.opencupUrl)) {
+      if (state.source !== 'codeforces' && state.standingsUrl) {
         els.contestName.textContent = `Loading ${state.sourceLabel} standings…`;
         fetchStandings();
         scheduleRefresh();
-      } else if (state.contestId) {
+      } else if (state.source === 'codeforces' && state.contestId) {
         fetchStandings();
         scheduleRefresh();
       } else {
-        applyData(demoData(), { demo: true });
-        setSync('', 'Preview data · choose a contest to go live');
+        updateSummary();
+        renderPage(false);
+        setSync('', 'Choose a contest');
         showSetup();
       }
     })();

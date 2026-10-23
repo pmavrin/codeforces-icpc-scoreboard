@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Reduced DOMjudge 10 markup from https://www.domjudge.org/demoweb/public.
+     Synthetic teams/results exercise all ICPC cell states. -->
+<title>Scoreboard example - DOMjudge</title>
+<script>
+var initial = 1764496800;
+var starttime = 1764493200;
+var endtime = 1764511200;
+</script>
+<div class="card-header">
+  <div><span style="font-weight: bold;">Example &amp; Contest</span></div>
+  <div><span id="contesttimer">started: 10:00 - ends: 15:00</span></div>
+</div>
+<table class="scoreboard main-scoreboard center">
+  <thead><tr class="scoreheader">
+    <th colspan="2">rank</th><th colspan="4">team</th><th colspan="2">score</th>
+    <th title="problem Alpha" data-problem-id="alpha" data-problem-name="Alpha"><span class="problem-badge"><span>A</span></span></th>
+    <th title="problem Beta" data-problem-id="beta" data-problem-name="Beta"><span class="problem-badge"><span>B</span></span></th>
+    <th title="problem Gamma" data-problem-id="gamma" data-problem-name="Gamma"><span class="problem-badge"><span>C</span></span></th>
+    <th title="problem Delta" data-problem-id="delta" data-problem-name="Delta"><span class="problem-badge"><span>D</span></span></th>
+  </tr></thead>
+  <tbody>
+    <tr data-team-id="42" data-team-name="Seems to be O(k!)">
+      <td class="no-border"><i class="fa fa-medal"></i></td>
+      <td class="scorepl rank">1</td>
+      <td class="scoreaf"><img src="flag.svg" alt="country"></td>
+      <td class="scoreaf">1234</td><td class="scoreaf heart"></td>
+      <td class="scoretn" title="Seems to be O(k!)"><a href="#">
+        <span class="forceWidth"><span class="category-badges">NWERC</span>Seems to be O(k!)</span>
+        <span class="univ forceWidth">University &amp; Institute</span>
+      </a></td>
+      <td class="scorenc">1</td><td class="scorett">40</td>
+      <td class="score_cell" data-problem="A"><a href="#"><div class="score_correct score_first">0<span>3 tries</span></div></a></td>
+      <td class="score_cell" data-problem="B"><div class="score_incorrect">&nbsp;<span>4 tries</span></div></td>
+      <td class="score_cell" data-problem="C"><div class="score_pending">&nbsp;<span>1 + 2 tries</span></div></td>
+      <td class="score_cell" data-problem="D"></td>
+    </tr>
+    <tr data-team-id="99" data-team-name="&lt;Dom&gt;ination">
+      <td></td><td class="scorepl rank"></td><td class="scoreaf"></td><td></td><td></td>
+      <td class="scoretn" title="&lt;Dom&gt;ination"><span class="forceWidth">&lt;Dom&gt;ination</span></td>
+      <td class="scorenc">1</td><td class="scorett">40</td>
+      <td class="score_cell" data-problem="A"><div class="score_correct">40<span>1 try</span></div></td>
+      <td class="score_cell" data-problem="B"></td>
+      <td class="score_cell" data-problem="C"></td>
+      <td class="score_cell" data-problem="D"></td>
+    </tr>
+    <tr><td id="scoresummary">Summary</td><td class="scorenc">2</td></tr>
+  </tbody>
+</table>
+<table id="cell_legend" class="scoreboard scorelegend"><tr class="score_correct score_first"><td>Solved first</td></tr></table>

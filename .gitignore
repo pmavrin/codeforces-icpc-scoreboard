@@ -1,4 +1,5 @@
 scoreboard.config.json
+/scoreboard.config*.json
 .env
 .env.*
 __pycache__/

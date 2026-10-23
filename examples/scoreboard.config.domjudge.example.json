@@ -1,0 +1,12 @@
+{
+  "source": "domjudge",
+  "domjudge_url": "https://www.domjudge.org/demoweb/public",
+  "university_aliases": {
+    "University of Cambridge": "Cambridge",
+    "University of Oxford": "Oxford",
+    "Karlsruhe Institute of Technology": "KIT",
+    "Hasso Plattner Institute": "HPI"
+  },
+  "host": "0.0.0.0",
+  "port": 8080
+}

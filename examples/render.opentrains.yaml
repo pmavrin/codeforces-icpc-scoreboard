@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: opentrains-scoreboard
+    runtime: python
+    plan: free
+    buildCommand: python3 -m unittest discover -s tests -v
+    startCommand: python3 server.py
+    healthCheckPath: /health
+    envVars:
+      - key: SCOREBOARD_SOURCE
+        value: opentrains
+      - key: OPENTRAINS_STANDINGS_URL
+        value: https://pafos25.opencup.org/resday8
