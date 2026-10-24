@@ -83,6 +83,30 @@ Render supplies `PORT`. The requested address is https://icpc-scoreboard.onrende
 
 For fixed-contest deployments, provider-specific Blueprint examples are also available in `examples/render.<source>.yaml`.
 
+### University names on Render
+
+In the Render dashboard, open the service's **Environment** settings and add
+`UNIVERSITY_ALIASES` with a JSON object as its value (no surrounding shell quotes):
+
+```json
+{
+  "Delft University of Technology": "TU Delft",
+  "National Technical University of Athens": "NTUA",
+  "National and Kapodistrian University of Athens": "NKUA",
+  "Aristotle University of Thessaloniki": "AUTH",
+  "American University of Beirut - Mediterraneo": "AUB Mediterraneo",
+  "Neapolis University Pafos": "NUP"
+}
+```
+
+Save the environment changes and redeploy, then reload the scoreboard page.
+Names must match the source's full university names exactly. These defaults
+apply to every source, including links with `?source=...&url=...`.
+Browser settings override individual names, not the entire server dictionary.
+Saving browser settings stores only differences from the server defaults, so
+unchanged defaults can receive future updates from Render. To reset a local
+override, remove its entry in **University names** and save.
+
 ## Add a source
 
 Providers are registered in `server.py` through `STANDINGS_SOURCES`. Each adapter supplies public defaults, URL-query settings, and a fetch function returning `(status, content_type, payload_bytes)`. Parsers return the common `contest`, `problems`, and `rows` shape. Add a matching option and label to the setup form for a new provider.

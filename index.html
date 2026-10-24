@@ -953,7 +953,9 @@
       function readSavedAliases() {
         try {
           const aliases = JSON.parse(localStorage.getItem('icpc-university-aliases') || 'null');
-          if (aliases && typeof aliases === 'object' && !Array.isArray(aliases)) return aliases;
+          if (aliases && typeof aliases === 'object' && !Array.isArray(aliases)) {
+            return { ...serverConfig.universityAliases, ...aliases };
+          }
         } catch (_) {}
         return serverConfig.universityAliases || {};
       }
@@ -1660,8 +1662,12 @@
         state.source = source;
         state.sourceLabel = sourceLabels[source];
         state.standingsUrl = parsedUrl?.href || '';
-        state.universityAliases = aliases;
-        localStorage.setItem('icpc-university-aliases', JSON.stringify(aliases));
+        state.universityAliases = { ...serverConfig.universityAliases, ...aliases };
+        // Store only overrides so subsequent server updates reach this browser.
+        const aliasOverrides = Object.fromEntries(Object.entries(aliases).filter(
+          ([name, alias]) => alias !== serverConfig.universityAliases?.[name]
+        ));
+        localStorage.setItem('icpc-university-aliases', JSON.stringify(aliasOverrides));
         localStorage.setItem('icpc-source', source);
         if (state.standingsUrl) localStorage.setItem(`icpc-${source}-url`, state.standingsUrl);
         state.contestId = id;

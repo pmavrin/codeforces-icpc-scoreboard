@@ -9,6 +9,26 @@ import server
 
 
 class ApplicationTests(unittest.TestCase):
+    def test_environment_aliases_override_file_defaults(self):
+        aliases = {'Delft University of Technology': 'TU Delft'}
+        with patch.dict(server.os.environ, {'UNIVERSITY_ALIASES': json.dumps(aliases)}, clear=True), \
+                patch.object(server, 'CONFIG_PATH') as path:
+            path.exists.return_value = True
+            path.read_text.return_value = json.dumps({'university_aliases': {'Old University': 'Old'}})
+            self.assertEqual(server.load_raw_config()['university_aliases'], aliases)
+
+    def test_environment_aliases_survive_source_and_url_overrides(self):
+        aliases = {'Delft University of Technology': 'TU Delft'}
+        with patch.dict(server.os.environ, {'UNIVERSITY_ALIASES': json.dumps(aliases)}, clear=True), \
+                patch.object(server, 'CONFIG_PATH') as path:
+            path.exists.return_value = False
+            for source in ['codeforces', 'opentrains', 'domjudge']:
+                with self.subTest(source=source):
+                    config = server.load_request_config({'source': [source], 'url': ['https://example.org/public']})
+                    public = server.app_public_config(config)
+                    self.assertEqual(public['universityAliases'], aliases)
+                    self.assertEqual(public['sources'][source]['universityAliases'], aliases)
+
     def test_no_config_required(self):
         with patch.object(server, 'load_raw_config', return_value={}):
             config = server.load_config()
