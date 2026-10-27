@@ -12,7 +12,24 @@ function helper(name) {
 }
 assert(!html.includes('codeforces.com/api/'), 'No direct Codeforces API calls');
 assert(!html.includes('id="apiKeyInput"'), 'No API key form');
-assert(!html.includes('state.contestId'), 'All source requests use URLs');
+assert(!html.includes('crypto.subtle'), 'No browser-side signing');
+assert(html.includes('pashka-bot'), 'Dedicated access account is visible');
+const savedSettings = {};
+const savedGroup = new Function('localStorage', helper('savedCodeforcesGroup') + '\nreturn savedCodeforcesGroup;')({ getItem: key => savedSettings[key] || null });
+assert(savedGroup({ groupCode: 'DefaultGroup' }) === 'DefaultGroup', 'Default group accompanies default contest');
+savedSettings['icpc-codeforces-url'] = '2045';
+assert(savedGroup({ groupCode: 'DefaultGroup' }) === '', 'Saved public contest does not inherit default group');
+savedSettings['icpc-codeforces-group'] = 'SavedGroup';
+assert(savedGroup({ groupCode: 'DefaultGroup' }) === 'SavedGroup', 'Saved group accompanies saved contest');
+const target = new Function(helper('codeforcesTarget') + '\nreturn codeforcesTarget;')();
+assert(target('2045').id === '2045', 'Public contest ID');
+assert(target('https://codeforces.com/group/ABC/contest/727989/standings').group === 'ABC', 'Group from URL');
+assert(target('727989', 'ABC').url === 'https://codeforces.com/group/ABC/contest/727989', 'ID and separate group');
+for (const [value, group] of [['https://codeforces.com/spectator/ranklist/abc', ''], ['https://evil.example/contest/2045', ''], ['https://codeforces.com/group/ABC/contest/42', 'XYZ']]) {
+  let rejected = false;
+  try { target(value, group); } catch (_) { rejected = true; }
+  assert(rejected, 'Invalid or conflicting contest target rejected');
+}
 
 const serverConfig = { universityAliases: { University: 'U', Another: 'A' } };
 let saved = '{}';

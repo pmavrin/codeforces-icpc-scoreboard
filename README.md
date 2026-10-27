@@ -10,18 +10,19 @@ python3 server.py
 
 Open http://localhost:8080/, choose a data source, and enter its contest or scoreboard URL. No configuration file or API key is required to start the application.
 
-- **Codeforces:** spectator ranklist URL (`https://codeforces.com/spectator/ranklist/...`). No API keys.
+- **Codeforces:** contest ID or contest URL, including `https://codeforces.com/group/GROUP/contest/ID`. Private contests use the server's `pashka-bot` account.
 - **OpenTrains:** public HTML standings URL, including Pafos/OpenCup pages.
 - **DOMjudge:** public ICPC scoreboard URL or static HTML export.
 
-Settings remember the selected source and its last URL in this browser. The address bar contains a shareable contest link. A Codeforces spectator token grants access to its ranklist, so share this link only with its intended audience. University aliases are edited under **University names**, stored in this browser, and apply to all sources. Invalid alias JSON is rejected before changing the contest.
+Settings remember the selected source and its last URL in this browser. The address bar contains a shareable contest link, without API credentials. University aliases are edited under **University names**, stored in this browser, and apply to all sources. Invalid alias JSON is rejected before changing the contest.
 
 The display refreshes every 30 seconds, shows 10 teams per page, and rotates problem groups when necessary. First-to-solve and pending/frozen submissions retain their distinct styles. Opening settings pauses automatic refresh; switching sources cancels the old request and clears old highlights.
 
 ## Permanent links
 
 ```text
-/?source=codeforces&url=https%3A%2F%2Fcodeforces.com%2Fspectator%2Franklist%2Fyour-ranklist-token
+/?source=codeforces&contest=2045
+/?source=codeforces&url=https%3A%2F%2Fcodeforces.com%2Fgroup%2FGROUP%2Fcontest%2FID
 /?source=opentrains&url=https%3A%2F%2Fpafos25.opencup.org%2Fresday8
 /?source=domjudge&url=https%3A%2F%2Fwww.domjudge.org%2Fdemoweb%2Fpublic
 ```
@@ -45,17 +46,25 @@ Environment variables override file values:
 | `SCOREBOARD_SOURCE` | Default source: `codeforces`, `opentrains`, or `domjudge` |
 | `OPENTRAINS_STANDINGS_URL` | Default OpenTrains URL |
 | `DOMJUDGE_STANDINGS_URL` | Default DOMjudge URL |
-| `CODEFORCES_STANDINGS_URL` | Default Codeforces spectator ranklist URL |
+| `CODEFORCES_CONTEST_URL` | Default Codeforces contest URL (takes precedence over contest ID) |
+| `CODEFORCES_CONTEST_ID` | Default Codeforces contest ID |
+| `CODEFORCES_GROUP_CODE` | Optional group code for the default contest |
+| `CODEFORCES_API_KEY` | Server-only API key belonging to `pashka-bot` |
+| `CODEFORCES_API_SECRET` | Server-only API secret belonging to `pashka-bot` |
 | `UNIVERSITY_ALIASES` | JSON object mapping full university names to display aliases |
 | `HOST`, `PORT` | Bind address and port; defaults: `0.0.0.0:8080` |
 
-## Codeforces spectator ranklists
+## Codeforces API and pashka-bot
 
-Create a spectator ranklist on Codeforces and paste its viewer URL into the Codeforces settings. The server reads the HTML table directly, without API calls, API keys, account cookies, or group-manager access. Team names and member handles come from separate links; solved counts, penalties, rejected attempts, and solve times come from table cells. Only ICPC scoring is supported. The countdown shows **Time remaining**, since this page does not provide the contest start time or duration. First-to-solve is not inferred from a potentially filtered ranklist.
+For the administrator: create a fresh API key and secret for the dedicated **pashka-bot** account, then set `CODEFORCES_API_KEY` and `CODEFORCES_API_SECRET` in Render's **Environment** settings and redeploy. Keep both values on the server; do not put them in browser settings, URLs, committed configuration files, or chat. For local development, provide the same environment variables through your local secret-management setup.
 
-Old contest-ID links and `CODEFORCES_API_KEY`, `CODEFORCES_API_SECRET`, `CODEFORCES_CONTEST_ID`, and `CODEFORCES_GROUP_CODE` settings are no longer used. Replace them with `CODEFORCES_STANDINGS_URL` (or `codeforces_url` in JSON). Previously saved browser API credentials are removed on page load.
+For contest organizers: add **pashka-bot** to your Codeforces group and grant it access to the contest, then paste the group contest URL into the scoreboard settings. Alternatively, enter the contest ID and group code separately. Viewers never need their own API credentials. If Codeforces denies access, check both the group and contest permissions for the bot.
 
-Codeforces may block server-side HTML requests with Cloudflare HTTP 403. The app reports that explicitly; opening the page in a browser does not authorize Render's separate requests. The parser has been verified against a saved spectator page, but parsing support does not bypass this upstream access restriction. Frozen `?` / `?N` notation is covered by synthetic tests; the supplied real snapshot was not frozen.
+**Publishing boundary:** this service exposes standings accessible to the bot to anyone who supplies the contest ID and group code. Adding the bot is therefore permission to broadcast those standings, not a way to keep them private. Use a dedicated account only in groups intended for this scoreboard. The server never enables `asManager` or forwards arbitrary API methods or caller-supplied credentials.
+
+Regular public contests are requested anonymously with only `contestId`; Gym, mashup, and group contests use server-side authentication when required. Requests are limited to one every 2.1 seconds per server process, with a shared 15-second cache. Only ICPC scoring is supported. See the [Codeforces API documentation](https://codeforces.com/apiHelp/methods) for access rules.
+
+Spectator ranklist URLs are no longer supported. Replace `CODEFORCES_STANDINGS_URL` with `CODEFORCES_CONTEST_URL` (or use `contest_id` and `group_code` in JSON). Legacy personal `api_key` / `api_secret` values in JSON are deliberately ignored, and old browser API credentials are removed on page load. Upstream errors are sanitized so signed URLs and credentials are not returned to viewers. API availability still depends on Codeforces; Cloudflare and rate-limit errors are reported without exposing credentials.
 
 ## HTML sources
 
@@ -69,7 +78,7 @@ HTML fetching accepts only public HTTP/HTTPS URLs on ports 80/443, checks DNS an
 
 ## Deploy to Render
 
-`render.yaml` defines a free Python web service named `icpc-scoreboard`. It runs tests before deployment and uses `/health` for readiness. No contest-specific environment variables or secret files are needed.
+`render.yaml` defines a free Python web service named `icpc-scoreboard`. It runs tests before deployment and uses `/health` for readiness. No contest-specific environment variables or secret files are needed to start; authenticated Codeforces contests require the bot credentials described above.
 
 Create a Render Web Service from this repository:
 
@@ -117,7 +126,7 @@ Providers are registered in `server.py` through `STANDINGS_SOURCES`. Each adapte
 python3 -m unittest discover -s tests -v
 ```
 
-Fixtures cover Codeforces spectator HTML, DOMjudge versions, freezes, empty tables, stable team IDs, provider selection, and public-URL restrictions. Fixtures omit account/session data from saved pages.
+Tests cover Codeforces API signing, anonymous and authenticated requests, credential isolation, safe errors, shared caching and rate limiting, DOMjudge versions, freezes, empty tables, stable team IDs, provider selection, and public-URL restrictions. Fixtures omit account/session data from saved pages.
 
 Frontend helper tests and a full-script syntax check can also be run with JavaScriptCore on macOS:
 

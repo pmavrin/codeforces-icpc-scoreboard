@@ -10,5 +10,11 @@ services:
     envVars:
       - key: SCOREBOARD_SOURCE
         value: codeforces
-      - key: CODEFORCES_STANDINGS_URL
+      - key: CODEFORCES_CONTEST_ID
+        value: "727989"
+      - key: CODEFORCES_GROUP_CODE
+        sync: false
+      - key: CODEFORCES_API_KEY
+        sync: false
+      - key: CODEFORCES_API_SECRET
         sync: false

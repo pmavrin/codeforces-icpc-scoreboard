@@ -34,7 +34,7 @@ class ApplicationTests(unittest.TestCase):
             self.assertEqual(config['source'], 'codeforces')
             public = server.app_public_config(config)
             self.assertEqual(set(public['sources']), {'codeforces', 'opentrains', 'domjudge'})
-            self.assertFalse(public['authRequired'])
+            self.assertEqual(public['botHandle'], 'pashka-bot')
 
     def test_legacy_source_alias_and_url_override(self):
         config = {'source': 'opencup', 'opencup_url': 'https://old.example/res'}

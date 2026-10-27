@@ -786,7 +786,12 @@
       </div>
       <div class="setup-field">
         <label for="contestInput">Scoreboard URL</label>
-        <input id="contestInput" type="text" inputmode="url" autocomplete="off" placeholder="https://codeforces.com/spectator/ranklist/..." required>
+        <input id="contestInput" type="text" inputmode="url" autocomplete="off" placeholder="https://codeforces.com/group/.../contest/..." required>
+      </div>
+      <div id="codeforcesOptions" class="setup-field" hidden>
+        <label for="groupInput">Group code (optional)</label>
+        <input id="groupInput" type="text" autocomplete="off" spellcheck="false">
+        <div class="field-help">Access account: <a href="https://codeforces.com/profile/pashka-bot" target="_blank" rel="noreferrer">pashka-bot</a></div>
       </div>
       <details class="setup-field">
         <summary>University names</summary>
@@ -824,8 +829,10 @@
       const initialSource = canonicalSource(String(params.get('source') || (params.has('contest') ? 'codeforces' : '') || localStorage.getItem('icpc-source') || serverConfig.source || 'codeforces').toLowerCase());
       const sourceDefaults = serverConfig.sources || { [canonicalSource(serverConfig.source)]: serverConfig };
       const initialDefaults = sourceDefaults[initialSource] || {};
-      const legacyCodeforcesLink = initialSource === 'codeforces' && params.has('contest') && !params.has('url');
-      const initialStandingsUrl = legacyCodeforcesLink ? '' : params.get('url') || localStorage.getItem(`icpc-${initialSource}-url`) || (initialSource === 'opentrains' ? localStorage.getItem('icpc-opencup-url') : '') || String(initialDefaults.standingsUrl || initialDefaults.opencupUrl || '');
+      const initialStandingsUrl = (initialSource === 'codeforces' ? params.get('contest') : '') || params.get('url') || localStorage.getItem(`icpc-${initialSource}-url`) || (initialSource === 'opentrains' ? localStorage.getItem('icpc-opencup-url') : '') || String(initialDefaults.standingsUrl || initialDefaults.opencupUrl || '');
+      const explicitContest = params.has('contest') || params.has('url');
+      const initialGroup = params.get('group') || (!explicitContest && initialSource === 'codeforces'
+        ? savedCodeforcesGroup(initialDefaults) : '');
       // API credentials from older versions are no longer used or retained.
       for (const key of ['icpc-api-key', 'icpc-api-secret']) {
         sessionStorage.removeItem(key);
@@ -836,6 +843,7 @@
         sourceLabel: sourceLabels[initialSource],
         universityAliases: readSavedAliases(),
         standingsUrl: initialStandingsUrl,
+        groupCode: initialSource === 'codeforces' ? initialGroup : '',
         contest: null,
         problems: [],
         rows: [],
@@ -861,7 +869,7 @@
         scoreboard: document.querySelector('.scoreboard'),
         syncStatus: $('#syncStatus'), syncText: $('#syncText'), pageDots: $('#pageDots'),
         setupDialog: $('#setupDialog'), setupForm: $('#setupForm'), contestInput: $('#contestInput'),
-        sourceSelect: $('#sourceSelect'), aliasesInput: $('#aliasesInput'),
+        sourceSelect: $('#sourceSelect'), groupInput: $('#groupInput'), aliasesInput: $('#aliasesInput'),
         dialogError: $('#dialogError'), refreshButton: $('#refreshButton'), settingsButton: $('#settingsButton'),
         fullscreenButton: $('#fullscreenButton'), previewButton: $('#previewButton')
       };
@@ -877,6 +885,26 @@
           }
         } catch (_) {}
         return serverConfig.universityAliases || {};
+      }
+
+      function savedCodeforcesGroup(defaults) {
+        return localStorage.getItem('icpc-codeforces-url')
+          ? localStorage.getItem('icpc-codeforces-group') || '' : defaults.groupCode || '';
+      }
+
+      function codeforcesTarget(value, group = '') {
+        value = String(value || '').trim();
+        group = String(group || '').trim();
+        if (group && !/^[A-Za-z0-9]{1,64}$/.test(group)) throw new Error('Enter a valid Codeforces group code.');
+        let id = /^[1-9]\d{0,8}$/.test(value) ? value : '';
+        if (!id) {
+          const match = value.match(/^https?:\/\/(?:www\.)?codeforces\.com(?::(?:80|443))?\/(?:group\/([A-Za-z0-9]{1,64})\/)?(?:contest|gym)\/([1-9]\d{0,8})(?:\/(?:standings|problems|status))?\/?(?:[?#].*)?$/);
+          if (!match) throw new Error('Enter a Codeforces contest ID or contest URL, not a spectator ranklist.');
+          if (match[1] && group && match[1] !== group) throw new Error('The group code does not match the contest URL.');
+          id = match[2];
+          group = match[1] || group;
+        }
+        return { id, group, url: group ? `https://codeforces.com/group/${group}/contest/${id}` : `https://codeforces.com/contest/${id}` };
       }
 
       function contestDisplayValue() {
@@ -1362,10 +1390,17 @@
         const controller = new AbortController();
         state.controller = controller;
         const requestId = ++state.requestId;
-        const timeout = setTimeout(() => controller.abort(), 20000);
+        const timeout = setTimeout(() => controller.abort(), 30000);
         try {
           const proxyUrl = new URL('api/standings', location.href);
-          proxyUrl.search = new URLSearchParams({ source: state.source, url: state.standingsUrl });
+          const requestParams = { source: state.source, url: state.standingsUrl };
+          if (state.source === 'codeforces') {
+            const target = codeforcesTarget(state.standingsUrl, state.groupCode);
+            requestParams.contestId = target.id;
+            requestParams.groupCode = target.group;
+            delete requestParams.url;
+          }
+          proxyUrl.search = new URLSearchParams(requestParams);
           const response = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
           const data = await response.json().catch(() => null);
           if (requestId !== state.requestId) return;
@@ -1376,6 +1411,7 @@
           state.lastUpdated = new Date();
           localStorage.setItem('icpc-source', state.source);
           localStorage.setItem(`icpc-${state.source}-url`, state.standingsUrl);
+          if (state.source === 'codeforces') localStorage.setItem('icpc-codeforces-group', state.groupCode);
           try { localStorage.setItem(standingsCacheKey(), JSON.stringify(data)); } catch (_) {}
           setSync('', `Updated ${formatClock(state.lastUpdated)}`);
           els.dialogError.textContent = '';
@@ -1404,7 +1440,7 @@
       }
 
       function standingsCacheKey() {
-        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}`;
+        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}` : ''}`;
       }
 
       function cancelRequest() {
@@ -1424,26 +1460,24 @@
 
       function useContest(value) {
         const source = els.sourceSelect.value;
-        let parsedUrl;
-        try { parsedUrl = new URL(value.trim()); } catch (_) {}
-        if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
-          els.dialogError.textContent = 'Enter a public scoreboard URL.';
-          return;
-        }
-        if (source === 'codeforces' && (
-          !['codeforces.com', 'www.codeforces.com', 'mirror.codeforces.com'].includes(parsedUrl.hostname)
-          || !/^\/spectator\/ranklist\/[A-Za-z0-9_-]+\/?$/.test(parsedUrl.pathname)
-          || !['', '80', '443'].includes(parsedUrl.port)
-        )) {
-          els.dialogError.textContent = 'Enter a Codeforces spectator ranklist URL: https://codeforces.com/spectator/ranklist/...';
-          return;
-        }
+        let urlValue, groupCode = '';
         if (source === 'codeforces') {
-          parsedUrl.protocol = 'https:';
-          parsedUrl.port = '';
-          parsedUrl.search = '';
-          parsedUrl.hash = '';
-          parsedUrl.pathname = parsedUrl.pathname.replace(/\/$/, '');
+          try {
+            const target = codeforcesTarget(value, els.groupInput.value);
+            urlValue = target.url;
+            groupCode = target.group;
+          } catch (error) {
+            els.dialogError.textContent = error.message;
+            return;
+          }
+        } else {
+          let parsedUrl;
+          try { parsedUrl = new URL(value.trim()); } catch (_) {}
+          if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
+            els.dialogError.textContent = 'Enter a public scoreboard URL.';
+            return;
+          }
+          urlValue = parsedUrl.href;
         }
         let aliases;
         try {
@@ -1456,7 +1490,9 @@
         cancelRequest();
         state.source = source;
         state.sourceLabel = sourceLabels[source];
-        state.standingsUrl = parsedUrl?.href || '';
+        state.standingsUrl = urlValue;
+        state.groupCode = groupCode;
+        if (source === 'codeforces') localStorage.setItem('icpc-codeforces-group', groupCode);
         state.universityAliases = { ...serverConfig.universityAliases, ...aliases };
         // Store only overrides so subsequent server updates reach this browser.
         const aliasOverrides = Object.fromEntries(Object.entries(aliases).filter(
@@ -1489,6 +1525,7 @@
         cancelRequest();
         els.sourceSelect.value = state.source;
         els.contestInput.value = contestDisplayValue();
+        els.groupInput.value = state.groupCode;
         els.aliasesInput.value = JSON.stringify(state.universityAliases, null, 2);
         updateSourceFields();
         els.dialogError.textContent = '';
@@ -1498,8 +1535,9 @@
 
       function updateSourceFields() {
         const codeforces = els.sourceSelect.value === 'codeforces';
-        els.setupDialog.querySelector('label[for="contestInput"]').textContent = codeforces ? 'Spectator ranklist URL' : 'Scoreboard URL';
-        els.contestInput.placeholder = codeforces ? 'https://codeforces.com/spectator/ranklist/...' : 'https://example.org/public';
+        els.setupDialog.querySelector('label[for="contestInput"]').textContent = codeforces ? 'Contest ID or URL' : 'Scoreboard URL';
+        els.contestInput.placeholder = codeforces ? 'https://codeforces.com/group/.../contest/...' : 'https://example.org/public';
+        $('#codeforcesOptions').hidden = !codeforces;
       }
 
       function demoData() {
@@ -1549,6 +1587,8 @@
         } else {
           els.contestInput.value = localStorage.getItem(`icpc-${source}-url`) || defaults.standingsUrl || '';
         }
+        els.groupInput.value = source === state.source ? state.groupCode
+          : source === 'codeforces' ? savedCodeforcesGroup(defaults) : '';
         els.dialogError.textContent = '';
         updateSourceFields();
       });
@@ -1582,7 +1622,6 @@
         renderPage(false);
         setSync('', 'Choose a contest');
         showSetup();
-        if (legacyCodeforcesLink) els.dialogError.textContent = 'Codeforces now requires a spectator ranklist URL instead of a contest ID.';
       }
     })();
   </script>

@@ -1,6 +1,7 @@
 {
   "source": "codeforces",
-  "codeforces_url": "https://codeforces.com/spectator/ranklist/your-ranklist-token",
+  "contest_id": 727989,
+  "group_code": "your-group-code",
   "host": "0.0.0.0",
   "port": 8080
 }

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from domjudge import parse_domjudge_standings
-from codeforces import parse_codeforces_standings, spectator_url
+from codeforces_api import fetch_standings as fetch_codeforces_api
 from public_http import read_public_html
 
 
@@ -27,7 +27,11 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("SCOREBOARD_CONFIG", ROOT / "scoreboard.config.json"))
 INDEX_PATH = ROOT / "index.html"
 ENV_CONFIG = {
-    "codeforces_url": "CODEFORCES_STANDINGS_URL",
+    "codeforces_url": "CODEFORCES_CONTEST_URL",
+    "contest_id": "CODEFORCES_CONTEST_ID",
+    "group_code": "CODEFORCES_GROUP_CODE",
+    "codeforces_bot_api_key": "CODEFORCES_API_KEY",
+    "codeforces_bot_api_secret": "CODEFORCES_API_SECRET",
     "source": "SCOREBOARD_SOURCE",
     "opencup_url": "OPENCUP_STANDINGS_URL",
     "opentrains_url": "OPENTRAINS_STANDINGS_URL",
@@ -325,28 +329,27 @@ def codeforces_public_config(config: dict[str, Any]) -> dict[str, Any]:
         "source": "codeforces",
         "sourceLabel": "Codeforces",
         "universityAliases": config.get("university_aliases", {}),
-        "standingsUrl": config.get("codeforces_url", ""),
-        "authRequired": False,
+        "standingsUrl": str(config.get("codeforces_url") or config.get("contest_id") or ""),
+        "groupCode": config.get("group_code", ""),
+        "botHandle": "pashka-bot",
     }
 
 
 def codeforces_query_config(query: dict[str, list[str]]) -> dict[str, Any]:
-    return {"codeforces_url": query["url"][0]} if "url" in query else {}
+    value = query.get("contestId", query.get("contest", query.get("url")))
+    result = {"codeforces_url": value[0], "group_code": ""} if value else {}
+    group = query.get("groupCode", query.get("group"))
+    if group is not None:
+        result["group_code"] = group[0]
+    return result
 
 
 def fetch_codeforces_standings(
     config: dict[str, Any],
     query: dict[str, list[str]],
 ) -> tuple[int, str, bytes]:
-    try:
-        url = spectator_url(str(config.get("codeforces_url") or query.get("url", [""])[0]))
-    except ValueError as error:
-        return failed_json(400, str(error))
-    status, content_type, body = fetch_html_standings(url, "Codeforces", parse_codeforces_standings)
-    if status == 403:
-        return failed_json(403, "Codeforces denied this server access (HTTP 403, possibly Cloudflare). "
-                           "Opening the ranklist in your browser does not grant the server access.")
-    return status, content_type, body
+    status, data = fetch_codeforces_api(config, query)
+    return status, "application/json; charset=utf-8", json_bytes(data)
 
 
 def opencup_public_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -430,7 +433,7 @@ STANDINGS_SOURCES: dict[str, StandingsSource] = {
     ),
     "codeforces": StandingsSource(
         label="Codeforces",
-        required_config=("codeforces_url",),
+        required_config=(),
         public_config=codeforces_public_config,
         fetch=fetch_codeforces_standings,
         query_config=codeforces_query_config,
