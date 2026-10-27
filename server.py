@@ -9,11 +9,9 @@ import http.client
 import re
 import json
 import os
-import secrets
 import time
 import urllib.error
 import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from html.parser import HTMLParser
@@ -21,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from domjudge import parse_domjudge_standings
+from codeforces import parse_codeforces_standings, spectator_url
 from public_http import read_public_html
 
 
@@ -28,10 +27,7 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("SCOREBOARD_CONFIG", ROOT / "scoreboard.config.json"))
 INDEX_PATH = ROOT / "index.html"
 ENV_CONFIG = {
-    "api_key": "CODEFORCES_API_KEY",
-    "api_secret": "CODEFORCES_API_SECRET",
-    "contest_id": "CODEFORCES_CONTEST_ID",
-    "group_code": "CODEFORCES_GROUP_CODE",
+    "codeforces_url": "CODEFORCES_STANDINGS_URL",
     "source": "SCOREBOARD_SOURCE",
     "opencup_url": "OPENCUP_STANDINGS_URL",
     "opentrains_url": "OPENTRAINS_STANDINGS_URL",
@@ -324,82 +320,33 @@ def parse_opencup_standings(page: str, source_url: str) -> dict[str, Any]:
     }
 
 
-def signed_codeforces_url(config: dict[str, Any], params: dict[str, str]) -> str:
-    method_name = "contest.standings"
-    rand = secrets.token_hex(3)
-    signed_params = {
-        **params,
-        "apiKey": str(config["api_key"]),
-        "time": str(int(time.time())),
-    }
-    ordered = sorted(signed_params.items(), key=lambda item: (item[0], item[1]))
-    canonical_query = "&".join(f"{key}={value}" for key, value in ordered)
-    signature_source = f"{rand}/{method_name}?{canonical_query}#{config['api_secret']}"
-    signature = hashlib.sha512(signature_source.encode("utf-8")).hexdigest()
-    query = urllib.parse.urlencode([*ordered, ("apiSig", rand + signature)])
-    return f"https://codeforces.com/api/{method_name}?{query}"
-
-
 def codeforces_public_config(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "codeforces",
         "sourceLabel": "Codeforces",
         "universityAliases": config.get("university_aliases", {}),
-        "contestId": config.get("contest_id"),
-        "groupCode": config.get("group_code", ""),
-        "opencupUrl": "",
-        "authRequired": bool(config.get("group_code")),
+        "standingsUrl": config.get("codeforces_url", ""),
+        "authRequired": False,
     }
 
 
 def codeforces_query_config(query: dict[str, list[str]]) -> dict[str, Any]:
-    return {}
+    return {"codeforces_url": query["url"][0]} if "url" in query else {}
 
 
 def fetch_codeforces_standings(
     config: dict[str, Any],
     query: dict[str, list[str]],
 ) -> tuple[int, str, bytes]:
-    contest_id = query.get("contestId", [""])[0]
-    group_code = query.get("groupCode", [""])[0]
-    if not re.fullmatch(r"\d{1,9}", contest_id):
-        return failed_json(400, "A valid Codeforces contest ID is required.")
-    configured = (contest_id == str(config.get("contest_id", ""))
-                  and group_code == str(config.get("group_code", ""))
-                  and config.get("api_key") and config.get("api_secret"))
-    restricted = bool(group_code) or query.get("auth", ["false"])[0] == "true"
-    if restricted and not configured:
-        return failed_json(403, "Enter Codeforces API credentials for this private contest.")
-
     try:
-        count = max(1, min(500, int(query.get("count", ["200"])[0])))
-    except ValueError:
-        count = 200
-    show_unofficial = query.get("showUnofficial", ["true"])[0].lower() == "true"
-    participant_types = "CONTESTANT,OUT_OF_COMPETITION" if show_unofficial else "CONTESTANT"
-    params = {
-        "contestId": contest_id,
-        "count": str(count),
-        "from": "1",
-    }
-    if group_code:
-        params.update(asManager="true", groupCode=group_code, participantTypes=participant_types)
-    else:
-        params["showUnofficial"] = str(show_unofficial).lower()
-    codeforces_url = (signed_codeforces_url(config, params) if configured else
-                      "https://codeforces.com/api/contest.standings?" + urllib.parse.urlencode({"contestId": contest_id}))
-    request = urllib.request.Request(
-        codeforces_url,
-        headers={"Accept": "application/json", "User-Agent": "ICPC-TV-Scoreboard/1.0"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=12) as response:
-            return response.status, "application/json; charset=utf-8", response.read()
-    except urllib.error.HTTPError as error:
-        return error.code, "application/json; charset=utf-8", error.read()
-    except (urllib.error.URLError, TimeoutError) as error:
-        reason = getattr(error, "reason", str(error))
-        return failed_json(502, f"Codeforces request failed: {reason}")
+        url = spectator_url(str(config.get("codeforces_url") or query.get("url", [""])[0]))
+    except ValueError as error:
+        return failed_json(400, str(error))
+    status, content_type, body = fetch_html_standings(url, "Codeforces", parse_codeforces_standings)
+    if status == 403:
+        return failed_json(403, "Codeforces denied this server access (HTTP 403, possibly Cloudflare). "
+                           "Opening the ranklist in your browser does not grant the server access.")
+    return status, content_type, body
 
 
 def opencup_public_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -483,7 +430,7 @@ STANDINGS_SOURCES: dict[str, StandingsSource] = {
     ),
     "codeforces": StandingsSource(
         label="Codeforces",
-        required_config=("api_key", "api_secret", "contest_id", "group_code"),
+        required_config=("codeforces_url",),
         public_config=codeforces_public_config,
         fetch=fetch_codeforces_standings,
         query_config=codeforces_query_config,

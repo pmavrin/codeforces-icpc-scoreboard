@@ -10,18 +10,18 @@ python3 server.py
 
 Open http://localhost:8080/, choose a data source, and enter its contest or scoreboard URL. No configuration file or API key is required to start the application.
 
-- **Codeforces:** contest ID or URL, optional group code, and private/Gym credentials.
+- **Codeforces:** spectator ranklist URL (`https://codeforces.com/spectator/ranklist/...`). No API keys.
 - **OpenTrains:** public HTML standings URL, including Pafos/OpenCup pages.
 - **DOMjudge:** public ICPC scoreboard URL or static HTML export.
 
-Settings remember the selected source and its last URL in this browser. The address bar contains a shareable contest link. API secrets are never included in that link. University aliases are edited under **University names**, stored in this browser, and apply to all sources. Invalid alias JSON is rejected before changing the contest.
+Settings remember the selected source and its last URL in this browser. The address bar contains a shareable contest link. A Codeforces spectator token grants access to its ranklist, so share this link only with its intended audience. University aliases are edited under **University names**, stored in this browser, and apply to all sources. Invalid alias JSON is rejected before changing the contest.
 
 The display refreshes every 30 seconds, shows 10 teams per page, and rotates problem groups when necessary. First-to-solve and pending/frozen submissions retain their distinct styles. Opening settings pauses automatic refresh; switching sources cancels the old request and clears old highlights.
 
 ## Permanent links
 
 ```text
-/?source=codeforces&contest=2045
+/?source=codeforces&url=https%3A%2F%2Fcodeforces.com%2Fspectator%2Franklist%2Fyour-ranklist-token
 /?source=opentrains&url=https%3A%2F%2Fpafos25.opencup.org%2Fresday8
 /?source=domjudge&url=https%3A%2F%2Fwww.domjudge.org%2Fdemoweb%2Fpublic
 ```
@@ -45,17 +45,17 @@ Environment variables override file values:
 | `SCOREBOARD_SOURCE` | Default source: `codeforces`, `opentrains`, or `domjudge` |
 | `OPENTRAINS_STANDINGS_URL` | Default OpenTrains URL |
 | `DOMJUDGE_STANDINGS_URL` | Default DOMjudge URL |
-| `CODEFORCES_CONTEST_ID` | Default Codeforces contest |
-| `CODEFORCES_GROUP_CODE` | Default Codeforces group |
-| `CODEFORCES_API_KEY`, `CODEFORCES_API_SECRET` | Optional server credentials, restricted to the configured contest and group |
+| `CODEFORCES_STANDINGS_URL` | Default Codeforces spectator ranklist URL |
 | `UNIVERSITY_ALIASES` | JSON object mapping full university names to display aliases |
 | `HOST`, `PORT` | Bind address and port; defaults: `0.0.0.0:8080` |
 
-## Codeforces authentication
+## Codeforces spectator ranklists
 
-Public contests use the anonymous API through the server, with a direct-browser fallback if necessary. Private and Gym contests can use API credentials entered in settings; the browser signs those requests and sends them directly to Codeforces. Credentials stay in session storage unless **Remember credentials on this display** is checked.
+Create a spectator ranklist on Codeforces and paste its viewer URL into the Codeforces settings. The server reads the HTML table directly, without API calls, API keys, account cookies, or group-manager access. Team names and member handles come from separate links; solved counts, penalties, rejected attempts, and solve times come from table cells. Only ICPC scoring is supported. The countdown shows **Time remaining**, since this page does not provide the contest start time or duration. First-to-solve is not inferred from a potentially filtered ranklist.
 
-Alternatively, configure server credentials for a particular contest and group. Those credentials can never be used to query a different contest through this server. Public deployments do not need server credentials.
+Old contest-ID links and `CODEFORCES_API_KEY`, `CODEFORCES_API_SECRET`, `CODEFORCES_CONTEST_ID`, and `CODEFORCES_GROUP_CODE` settings are no longer used. Replace them with `CODEFORCES_STANDINGS_URL` (or `codeforces_url` in JSON). Previously saved browser API credentials are removed on page load.
+
+Codeforces may block server-side HTML requests with Cloudflare HTTP 403. The app reports that explicitly; opening the page in a browser does not authorize Render's separate requests. The parser has been verified against a saved spectator page, but parsing support does not bypass this upstream access restriction. Frozen `?` / `?N` notation is covered by synthetic tests; the supplied real snapshot was not frozen.
 
 ## HTML sources
 
@@ -117,4 +117,10 @@ Providers are registered in `server.py` through `STANDINGS_SOURCES`. Each adapte
 python3 -m unittest discover -s tests -v
 ```
 
-Fixtures cover DOMjudge versions, freezes, empty tables, stable team IDs, provider selection, credential boundaries, and public-URL restrictions.
+Fixtures cover Codeforces spectator HTML, DOMjudge versions, freezes, empty tables, stable team IDs, provider selection, and public-URL restrictions. Fixtures omit account/session data from saved pages.
+
+Frontend helper tests and a full-script syntax check can also be run with JavaScriptCore on macOS:
+
+```bash
+/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc tests/frontend.test.js
+```

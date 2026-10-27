@@ -1,4 +1,3 @@
-import io
 import json
 import socket
 import unittest
@@ -49,22 +48,6 @@ class ApplicationTests(unittest.TestCase):
         public = server.app_public_config({'source': 'domjudge', 'api_key': 'PRIVATE_KEY', 'api_secret': 'PRIVATE_SECRET'})
         self.assertNotIn('PRIVATE', json.dumps(public))
 
-    def test_codeforces_public_and_private_contest_boundaries(self):
-        response = io.BytesIO(b'{"status":"OK"}')
-        response.status = 200
-        private = {'contest_id': '123', 'group_code': 'privategroup', 'api_key': 'key', 'api_secret': 'secret'}
-        with patch.object(server.urllib.request, 'urlopen', return_value=response) as fetch:
-            self.assertEqual(server.fetch_codeforces_standings(private, {'contestId': ['2045']})[0], 200)
-            url = fetch.call_args.args[0].full_url
-            self.assertIn('contestId=2045', url)
-            self.assertNotIn('count=', url)
-            self.assertNotIn('apiKey', url)
-            self.assertNotIn('apiSig', url)
-        with patch.object(server.urllib.request, 'urlopen') as fetch:
-            self.assertEqual(server.fetch_codeforces_standings(private, {'contestId': ['456'], 'groupCode': ['privategroup']})[0], 403)
-            self.assertEqual(server.fetch_codeforces_standings({}, {'contestId': ['123'], 'auth': ['true']})[0], 403)
-            self.assertEqual(server.fetch_codeforces_standings({}, {'contestId': ['invalid']})[0], 400)
-            fetch.assert_not_called()
 
 
 class PublicHTTPTests(unittest.TestCase):
