@@ -14,6 +14,12 @@ DATA = {'status': 'OK', 'result': {'contest': {'id': 727989, 'name': 'Example', 
 CONFIG = {'codeforces_bot_api_key': 'BOT_KEY', 'codeforces_bot_api_secret': 'BOT_SECRET'}
 
 
+def standings_row(contest_id, rank, name, participant_type='CONTESTANT'):
+    return {'rank': rank, 'points': 2, 'penalty': 50,
+            'party': {'contestId': contest_id, 'teamName': name, 'participantType': participant_type},
+            'problemResults': [{'points': 1, 'bestSubmissionTimeSeconds': 1200}]}
+
+
 class Response(io.BytesIO):
     def __init__(self, data, status=200):
         super().__init__(data if isinstance(data, bytes) else json.dumps(data).encode())
@@ -65,6 +71,40 @@ class CodeforcesAPITests(unittest.TestCase):
             self.assertEqual(api.fetch_standings(CONFIG, {'url': ['https://codeforces.com/gym/100001']})[0], 200)
         self.assertEqual(fetch.call_count, 2)
         self.assertEqual(fetch.call_args.args[1:], ('BOT_KEY', 'BOT_SECRET'))
+
+    def test_mirror_excludes_original_gym_and_reranks_before_caching(self):
+        rows = [standings_row(106787, 4, 'Original Gym contestant'),
+                standings_row(729865, 10, 'Virtual', 'VIRTUAL'),
+                standings_row(729865, 120, 'MIR'),
+                standings_row(106787, 222, 'Another Gym contestant'),
+                standings_row(729865, 231, 'Team A'),
+                standings_row(729865, 231, 'Team B'),
+                standings_row(729865, 234, 'Unofficial', 'OUT_OF_COMPETITION'),
+                standings_row(729865, 240, 'Practice', 'PRACTICE'),
+                standings_row(729865, 241, 'Jury', 'MANAGER'),
+                standings_row(None, 242, 'Unknown contest'),
+                standings_row(729865, 301, 'INT')]
+        upstream = {**DATA, 'result': {**DATA['result'], 'contest': {'id': 729865}, 'rows': rows}}
+        query = {'url': ['https://codeforces.com/group/qhHFL5aN06/contest/729865']}
+        with patch.object(api, 'api_request', return_value=upstream) as fetch:
+            status, data = api.fetch_standings(CONFIG, query)
+            self.assertEqual(api.fetch_standings(CONFIG, query), (status, data))
+        fetch.assert_called_once()
+        self.assertEqual(status, 200)
+        filtered = data['result']['rows']
+        self.assertEqual([r['party']['teamName'] for r in filtered], ['MIR', 'Team A', 'Team B', 'Unofficial', 'INT'])
+        self.assertEqual([r['rank'] for r in filtered], [1, 2, 2, 4, 5])
+        self.assertEqual(filtered[0]['problemResults'], rows[2]['problemResults'])
+        self.assertEqual(rows[2]['rank'], 120, 'Do not mutate the upstream response')
+
+    def test_empty_mirror_does_not_fall_back_to_original_teams(self):
+        upstream = {**DATA, 'result': {**DATA['result'], 'rows': [standings_row(106787, 1, 'Original')]}}
+        self.assertEqual(api.contest_standings(upstream, '729865')['result']['rows'], [])
+
+    def test_ordinary_standings_keep_order_scores_and_ties(self):
+        rows = [standings_row(2045, rank, str(i)) for i, rank in enumerate([1, 2, 2, 4])]
+        upstream = {**DATA, 'result': {**DATA['result'], 'rows': rows}}
+        self.assertEqual(api.contest_standings(upstream, '2045'), upstream)
 
     def test_missing_bot_key_and_old_personal_keys_are_not_used(self):
         with patch.object(api, 'api_request') as fetch:

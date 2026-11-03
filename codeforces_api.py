@@ -115,6 +115,27 @@ def api_request(params, key="", secret=""):
     return {"status": "OK", "result": {name: result[name] for name in ("contest", "problems", "rows")}}
 
 
+def contest_standings(data, contest_id):
+    result = data["result"]
+    rows = []
+    previous_rank = None
+    rank = 0
+    for row in result["rows"]:
+        party = row.get("party", {})
+        # Group mirrors can include the original Gym's contestants and ghosts.
+        if str(party.get("contestId")) != str(contest_id):
+            continue
+        if party.get("participantType") not in ("CONTESTANT", "OUT_OF_COMPETITION"):
+            continue
+        # Keep Codeforces' ordering and tie decisions, but remove ranking gaps.
+        upstream_rank = row["rank"]
+        if upstream_rank != previous_rank:
+            rank = len(rows) + 1
+        rows.append({**row, "rank": rank})
+        previous_rank = upstream_rank
+    return {**data, "result": {**result, "rows": rows}}
+
+
 def fetch_standings(config, query):
     def failure(status, message):
         return status, {"status": "FAILED", "comment": message}
@@ -155,6 +176,7 @@ def fetch_standings(config, query):
                     params["groupCode"] = group
                 # Never enable asManager: respect the participant-visible scoreboard and freeze.
                 data = api_request(params, key, secret)
+            data = contest_standings(data, contest_id)
             status = 200
         except APIError as error:
             status, data = failure(error.status, str(error))

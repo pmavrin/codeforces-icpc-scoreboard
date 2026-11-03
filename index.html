@@ -1440,7 +1440,7 @@
       }
 
       function standingsCacheKey() {
-        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}` : ''}`;
+        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}-contest-only-v2` : ''}`;
       }
 
       function cancelRequest() {

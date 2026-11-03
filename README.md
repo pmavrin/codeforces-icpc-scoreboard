@@ -64,6 +64,8 @@ For contest organizers: add **pashka-bot** to your Codeforces group and grant it
 
 Regular public contests are requested anonymously with only `contestId`; Gym, mashup, and group contests use server-side authentication when required. Requests are limited to one every 2.1 seconds per server process, with a shared 15-second cache. Only ICPC scoring is supported. See the [Codeforces API documentation](https://codeforces.com/apiHelp/methods) for access rules.
 
+For mirrors, Codeforces can include participants from the original Gym in the same API response. The adapter keeps only rows whose `party.contestId` matches the requested contest, excludes practice/virtual/manager entries, and renumbers the remaining contestants while preserving Codeforces' order and ties. Out-of-competition entries remain available. An empty mirror stays empty instead of showing the original Gym's teams.
+
 Spectator ranklist URLs are no longer supported. Replace `CODEFORCES_STANDINGS_URL` with `CODEFORCES_CONTEST_URL` (or use `contest_id` and `group_code` in JSON). Legacy personal `api_key` / `api_secret` values in JSON are deliberately ignored, and old browser API credentials are removed on page load. Upstream errors are sanitized so signed URLs and credentials are not returned to viewers. API availability still depends on Codeforces; Cloudflare and rate-limit errors are reported without exposing credentials.
 
 ## HTML sources
