@@ -59,6 +59,21 @@ assert(participantKey(ghostRow) !== participantKey(secondGhost), 'Ghosts without
 assert(participantKey(ghostRow) === participantKey({ ...ghostRow, rank: 42 }), 'Ghost identity does not depend on rank');
 const members = new Function(helper('participantMembers') + '\nreturn participantMembers;')();
 assert(members(ghostRow) === 'Original contest', 'Ghosts are not labeled virtual users');
+const fakeDocument = { createElement: tag => ({
+  tag, children: [], attrs: {},
+  appendChild(child) { this.children.push(child); },
+  append(...children) { this.children.push(...children); },
+  setAttribute(name, value) { this.attrs[name] = value; }
+}) };
+const teamCell = new Function('document', 'participantDisplay', helper('makeTeamCell') + '\nreturn makeTeamCell;')(
+  fakeDocument, () => ({ name: 'Test team', title: 'Test team', details: 'Original contest' })
+);
+const ghostHeading = teamCell(ghostRow).children[0];
+assert(ghostHeading.children[0].className === 'ghost-marker', 'Ghost marker precedes the name and cannot be truncated with it');
+assert(ghostHeading.children[0].textContent === '\uD83D\uDC7B', 'Ghost emoji');
+assert(ghostHeading.children[0].attrs['aria-label'] === 'Ghost from original contest', 'Ghost marker has an accessible label');
+assert(ghostHeading.children[0].title === 'Ghost from original contest', 'Ghost marker has a tooltip');
+assert(teamCell({ party: { ghost: false } }).children[0].children[0].className === 'team-name', 'Ordinary teams have no ghost marker');
 const savedSettings = {};
 const savedGroup = new Function('localStorage', helper('savedCodeforcesGroup') + '\nreturn savedCodeforcesGroup;')({ getItem: key => savedSettings[key] || null });
 assert(savedGroup({ groupCode: 'DefaultGroup' }) === 'DefaultGroup', 'Default group accompanies default contest');

@@ -306,6 +306,8 @@
 
     tbody tr:nth-child(even) { background: rgba(255, 255, 255, .028); }
 
+    tbody tr.ghost-row td > * { opacity: .72; }
+
     tbody tr.score-group-start td {
       border-top: 4px solid rgba(184, 206, 235, .42);
     }
@@ -381,6 +383,14 @@
       line-height: 1.12;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .ghost-marker {
+      flex: 0 0 1.5rem;
+      width: 1.5rem;
+      line-height: 1;
+      font-size: 1.25rem;
+      text-align: center;
     }
 
     .recent-solve-badge {
@@ -1175,6 +1185,15 @@
         const display = participantDisplay(row);
         const heading = document.createElement('div');
         heading.className = 'team-heading';
+        if (row.party.ghost === true) {
+          const marker = document.createElement('span');
+          marker.className = 'ghost-marker';
+          marker.textContent = '👻';
+          marker.title = 'Ghost from original contest';
+          marker.setAttribute('role', 'img');
+          marker.setAttribute('aria-label', marker.title);
+          heading.appendChild(marker);
+        }
         const name = document.createElement('div');
         name.className = 'team-name';
         name.textContent = display.name;
@@ -1268,6 +1287,7 @@
 
         visibleRows.forEach((row, index) => {
           const tr = document.createElement('tr');
+          if (row.party.ghost === true) tr.classList.add('ghost-row');
           tr.style.setProperty('--row-index', String(index));
           if (animate) tr.classList.add('is-new');
           const absoluteRowIndex = rowStart + index;
