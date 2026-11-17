@@ -1356,6 +1356,13 @@
           || (config.showUnofficial && row.party.participantType === 'OUT_OF_COMPETITION');
       }
 
+      function visibleStandingsRows(rows) {
+        // Original ghosts must not push local teams beyond the default row cap.
+        const limit = state.source === 'codeforces' && state.showGhosts && !params.has('count')
+          ? rows.length : config.count;
+        return rows.filter(visibleParticipant).slice(0, limit);
+      }
+
       function applyData(data, { demo = false } = {}) {
         const result = data.result || data;
         const isInitialRender = state.rows.length === 0;
@@ -1371,9 +1378,7 @@
         state.receivedAt = Number.isFinite(result.contest?.observedAtSeconds)
           ? result.contest.observedAtSeconds * 1000 : Date.now();
         state.problems = result.problems || [];
-        const nextRows = (result.rows || [])
-          .filter(visibleParticipant)
-          .slice(0, config.count);
+        const nextRows = visibleStandingsRows(result.rows || []);
         if (isInitialRender) {
           state.recentSolves.clear();
         } else {

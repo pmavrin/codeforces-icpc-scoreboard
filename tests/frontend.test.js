@@ -45,6 +45,14 @@ assert(!visible({ party: { ghost: false, participantType: 'VIRTUAL' } }), 'Ordin
 assert(!visible({ party: { participantType: 'PRACTICE' } }), 'Practice stays hidden');
 filterState.source = 'domjudge';
 assert(!visible(ghostRow), 'Codeforces option does not affect other providers');
+filterState.source = 'codeforces';
+filterConfig.count = 200;
+const visibleRows = new Function('state', 'config', 'params', helper('visibleParticipant') + helper('visibleStandingsRows') + '\nreturn visibleStandingsRows;')(filterState, filterConfig, settingParams);
+const manyRows = [...Array(210).fill(ghostRow), { party: { teamName: 'Local', participantType: 'CONTESTANT' } }];
+assert(visibleRows(manyRows).length === 211, 'Ghosts do not hide local teams beyond the default row limit');
+ghostParams.count = '200';
+assert(visibleRows(manyRows).length === 200, 'Explicit row limit is still honored');
+delete ghostParams.count;
 const participantKey = new Function(helper('participantKey') + '\nreturn participantKey;')();
 const secondGhost = { party: { ...ghostRow.party, participantId: 11 } };
 assert(participantKey(ghostRow) !== participantKey(secondGhost), 'Ghosts without members have distinct stable keys');

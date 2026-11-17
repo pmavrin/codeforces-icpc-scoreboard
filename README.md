@@ -68,6 +68,8 @@ For mirrors, Codeforces can include participants from the original Gym in the sa
 
 Enable **Show original contest ghosts** in the Codeforces settings to include entries marked `party.ghost: true` from the original contest. Ordinary virtual participants and unrelated original-contest entrants remain excluded. The checkbox is off by default, is remembered in this browser, and is included in shared links as `ghosts=true` or `ghosts=false`. An explicit contest link without that parameter keeps ghosts hidden. The API endpoint accepts the same `ghosts=true` option; it is not forwarded to Codeforces. Cached results with and without ghosts are separate.
 
+With ghosts enabled, all matching rows are displayed across pages unless the link explicitly sets `count`. This prevents original-contest ghosts from pushing local teams beyond the normal 200-row display limit.
+
 Spectator ranklist URLs are no longer supported. Replace `CODEFORCES_STANDINGS_URL` with `CODEFORCES_CONTEST_URL` (or use `contest_id` and `group_code` in JSON). Legacy personal `api_key` / `api_secret` values in JSON are deliberately ignored, and old browser API credentials are removed on page load. Upstream errors are sanitized so signed URLs and credentials are not returned to viewers. API availability still depends on Codeforces; Cloudflare and rate-limit errors are reported without exposing credentials.
 
 ## HTML sources
