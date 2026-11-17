@@ -101,6 +101,40 @@ class CodeforcesAPITests(unittest.TestCase):
         upstream = {**DATA, 'result': {**DATA['result'], 'rows': [standings_row(106787, 1, 'Original')]}}
         self.assertEqual(api.contest_standings(upstream, '729865')['result']['rows'], [])
 
+    def test_ghost_toggle_includes_only_real_ghosts_from_original_contest(self):
+        ghost = standings_row(106787, 1, 'Original team', 'VIRTUAL')
+        ghost['party']['ghost'] = True
+        local_ghost = standings_row(729865, 2, 'Imported team')
+        local_ghost['party']['ghost'] = True
+        not_a_ghost = standings_row(106787, 3, 'Virtual user', 'VIRTUAL')
+        not_a_ghost['party']['ghost'] = False
+        rows = [ghost, local_ghost, not_a_ghost,
+                standings_row(106787, 4, 'Original contestant'),
+                standings_row(729865, 5, 'Local virtual', 'VIRTUAL'),
+                standings_row(729865, 6, 'Local team')]
+        upstream = {**DATA, 'result': {**DATA['result'], 'rows': rows}}
+        hidden = api.contest_standings(upstream, '729865')['result']['rows']
+        shown = api.contest_standings(upstream, '729865', True)['result']['rows']
+        self.assertEqual([r['party']['teamName'] for r in hidden], ['Local team'])
+        self.assertEqual([r['rank'] for r in hidden], [1])
+        self.assertEqual([r['party']['teamName'] for r in shown], ['Original team', 'Imported team', 'Local team'])
+        self.assertEqual([r['rank'] for r in shown], [1, 2, 3])
+        self.assertIs(shown[0]['party']['ghost'], True)
+        self.assertEqual(rows[-1]['rank'], 6)
+
+    def test_ghost_setting_is_not_forwarded_and_caches_are_separate(self):
+        ghost = standings_row(106787, 1, 'Original team', 'VIRTUAL')
+        ghost['party']['ghost'] = True
+        upstream = {**DATA, 'result': {**DATA['result'], 'rows': [ghost, standings_row(729865, 2, 'Local')]}}
+        query = {'contestId': ['729865'], 'groupCode': ['Group42']}
+        with patch.object(api, 'api_request', return_value=upstream) as fetch:
+            self.assertEqual(len(api.fetch_standings(CONFIG, query)[1]['result']['rows']), 1)
+            self.assertEqual(len(api.fetch_standings(CONFIG, {**query, 'ghosts': ['true']})[1]['result']['rows']), 2)
+            for value in ['false', '0', 'TRUE']:
+                self.assertEqual(len(api.fetch_standings(CONFIG, {**query, 'ghosts': [value]})[1]['result']['rows']), 1)
+            self.assertEqual(fetch.call_count, 2)
+            self.assertNotIn('ghosts', fetch.call_args.args[0])
+
     def test_ordinary_standings_keep_order_scores_and_ties(self):
         rows = [standings_row(2045, rank, str(i)) for i, rank in enumerate([1, 2, 2, 4])]
         upstream = {**DATA, 'result': {**DATA['result'], 'rows': rows}}

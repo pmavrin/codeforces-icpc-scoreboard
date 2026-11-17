@@ -648,6 +648,8 @@
     .setup-field { margin-top: 1rem; }
     .setup-field textarea { height: 9rem; padding: .75rem; font: .85rem monospace; resize: vertical; }
     .setup-field summary { cursor: pointer; color: #c9d4e2; font-weight: 700; margin-bottom: .7rem; }
+    .checkbox-field { display: flex; align-items: center; gap: .65rem; margin: 1rem 0 0; }
+    .checkbox-field input { flex: 0 0 1.1rem; width: 1.1rem; height: 1.1rem; padding: 0; accent-color: var(--blue); }
     [hidden] { display: none !important; }
 
     .dialog-actions { display: flex; gap: .8rem; margin-top: 1.65rem; }
@@ -792,6 +794,7 @@
         <label for="groupInput">Group code (optional)</label>
         <input id="groupInput" type="text" autocomplete="off" spellcheck="false">
         <div class="field-help">Access account: <a href="https://codeforces.com/profile/pashka-bot" target="_blank" rel="noreferrer">pashka-bot</a></div>
+        <label class="checkbox-field"><input id="ghostsInput" type="checkbox">Show original contest ghosts</label>
       </div>
       <details class="setup-field">
         <summary>University names</summary>
@@ -844,6 +847,7 @@
         universityAliases: readSavedAliases(),
         standingsUrl: initialStandingsUrl,
         groupCode: initialSource === 'codeforces' ? initialGroup : '',
+        showGhosts: initialGhostSetting(),
         contest: null,
         problems: [],
         rows: [],
@@ -869,7 +873,7 @@
         scoreboard: document.querySelector('.scoreboard'),
         syncStatus: $('#syncStatus'), syncText: $('#syncText'), pageDots: $('#pageDots'),
         setupDialog: $('#setupDialog'), setupForm: $('#setupForm'), contestInput: $('#contestInput'),
-        sourceSelect: $('#sourceSelect'), groupInput: $('#groupInput'), aliasesInput: $('#aliasesInput'),
+        sourceSelect: $('#sourceSelect'), groupInput: $('#groupInput'), ghostsInput: $('#ghostsInput'), aliasesInput: $('#aliasesInput'),
         dialogError: $('#dialogError'), refreshButton: $('#refreshButton'), settingsButton: $('#settingsButton'),
         fullscreenButton: $('#fullscreenButton'), previewButton: $('#previewButton')
       };
@@ -885,6 +889,11 @@
           }
         } catch (_) {}
         return serverConfig.universityAliases || {};
+      }
+
+      function initialGhostSetting() {
+        return params.has('ghosts') ? params.get('ghosts') === 'true'
+          : !explicitContest && localStorage.getItem('icpc-codeforces-ghosts') === 'true';
       }
 
       function savedCodeforcesGroup(defaults) {
@@ -934,6 +943,7 @@
       }
 
       function participantKey(row) {
+        if (row.party.ghost === true) return `ghost:${row.party.contestId}:${row.party.participantId ?? row.party.teamId ?? row.party.teamName}`;
         return row.party.teamId ? `team:${row.party.teamId}` : row.party.members.map((member) => member.handle).join('|');
       }
 
@@ -944,6 +954,7 @@
       }
 
       function participantMembers(row) {
+        if (row.party.ghost === true) return 'Original contest';
         if (!row.party.teamName || !row.party.members?.length) {
           const type = String(row.party.participantType || '').toLowerCase();
           return type && type !== 'contestant' ? type : '';
@@ -1339,6 +1350,12 @@
         updateClock();
       }
 
+      function visibleParticipant(row) {
+        if (state.source === 'codeforces' && row.party.ghost === true) return state.showGhosts;
+        return row.party.participantType === 'CONTESTANT'
+          || (config.showUnofficial && row.party.participantType === 'OUT_OF_COMPETITION');
+      }
+
       function applyData(data, { demo = false } = {}) {
         const result = data.result || data;
         const isInitialRender = state.rows.length === 0;
@@ -1354,11 +1371,8 @@
         state.receivedAt = Number.isFinite(result.contest?.observedAtSeconds)
           ? result.contest.observedAtSeconds * 1000 : Date.now();
         state.problems = result.problems || [];
-        const visibleParticipantTypes = config.showUnofficial
-          ? new Set(['CONTESTANT', 'OUT_OF_COMPETITION'])
-          : new Set(['CONTESTANT']);
         const nextRows = (result.rows || [])
-          .filter((row) => visibleParticipantTypes.has(row.party.participantType))
+          .filter(visibleParticipant)
           .slice(0, config.count);
         if (isInitialRender) {
           state.recentSolves.clear();
@@ -1398,6 +1412,7 @@
             const target = codeforcesTarget(state.standingsUrl, state.groupCode);
             requestParams.contestId = target.id;
             requestParams.groupCode = target.group;
+            requestParams.ghosts = String(state.showGhosts);
             delete requestParams.url;
           }
           proxyUrl.search = new URLSearchParams(requestParams);
@@ -1411,7 +1426,10 @@
           state.lastUpdated = new Date();
           localStorage.setItem('icpc-source', state.source);
           localStorage.setItem(`icpc-${state.source}-url`, state.standingsUrl);
-          if (state.source === 'codeforces') localStorage.setItem('icpc-codeforces-group', state.groupCode);
+          if (state.source === 'codeforces') {
+            localStorage.setItem('icpc-codeforces-group', state.groupCode);
+            localStorage.setItem('icpc-codeforces-ghosts', String(state.showGhosts));
+          }
           try { localStorage.setItem(standingsCacheKey(), JSON.stringify(data)); } catch (_) {}
           setSync('', `Updated ${formatClock(state.lastUpdated)}`);
           els.dialogError.textContent = '';
@@ -1440,7 +1458,7 @@
       }
 
       function standingsCacheKey() {
-        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}-contest-only-v2` : ''}`;
+        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}-ghosts-${state.showGhosts}-v3` : ''}`;
       }
 
       function cancelRequest() {
@@ -1492,7 +1510,11 @@
         state.sourceLabel = sourceLabels[source];
         state.standingsUrl = urlValue;
         state.groupCode = groupCode;
-        if (source === 'codeforces') localStorage.setItem('icpc-codeforces-group', groupCode);
+        state.showGhosts = source === 'codeforces' && els.ghostsInput.checked;
+        if (source === 'codeforces') {
+          localStorage.setItem('icpc-codeforces-group', groupCode);
+          localStorage.setItem('icpc-codeforces-ghosts', String(state.showGhosts));
+        }
         state.universityAliases = { ...serverConfig.universityAliases, ...aliases };
         // Store only overrides so subsequent server updates reach this browser.
         const aliasOverrides = Object.fromEntries(Object.entries(aliases).filter(
@@ -1510,8 +1532,9 @@
         state.pageTimer = null;
         state.currentPage = 0;
         const url = new URL(location.href);
-        for (const key of ['source', 'contest', 'group', 'auth', 'url']) url.searchParams.delete(key);
+        for (const key of ['source', 'contest', 'group', 'auth', 'url', 'ghosts']) url.searchParams.delete(key);
         url.searchParams.set('source', source);
+        if (source === 'codeforces') url.searchParams.set('ghosts', String(state.showGhosts));
         if (state.standingsUrl) url.searchParams.set('url', state.standingsUrl);
         history.replaceState({}, '', url);
         updateSummary();
@@ -1526,6 +1549,7 @@
         els.sourceSelect.value = state.source;
         els.contestInput.value = contestDisplayValue();
         els.groupInput.value = state.groupCode;
+        els.ghostsInput.checked = state.showGhosts;
         els.aliasesInput.value = JSON.stringify(state.universityAliases, null, 2);
         updateSourceFields();
         els.dialogError.textContent = '';
@@ -1589,6 +1613,8 @@
         }
         els.groupInput.value = source === state.source ? state.groupCode
           : source === 'codeforces' ? savedCodeforcesGroup(defaults) : '';
+        els.ghostsInput.checked = source === state.source ? state.showGhosts
+          : source === 'codeforces' && localStorage.getItem('icpc-codeforces-ghosts') === 'true';
         els.dialogError.textContent = '';
         updateSourceFields();
       });

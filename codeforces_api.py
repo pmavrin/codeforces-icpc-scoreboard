@@ -115,18 +115,22 @@ def api_request(params, key="", secret=""):
     return {"status": "OK", "result": {name: result[name] for name in ("contest", "problems", "rows")}}
 
 
-def contest_standings(data, contest_id):
+def contest_standings(data, contest_id, show_ghosts=False):
     result = data["result"]
     rows = []
     previous_rank = None
     rank = 0
     for row in result["rows"]:
         party = row.get("party", {})
-        # Group mirrors can include the original Gym's contestants and ghosts.
-        if str(party.get("contestId")) != str(contest_id):
-            continue
-        if party.get("participantType") not in ("CONTESTANT", "OUT_OF_COMPETITION"):
-            continue
+        # Ghosts from the original contest are distinct from ordinary virtual users.
+        if party.get("ghost") is True:
+            if not show_ghosts:
+                continue
+        else:
+            if str(party.get("contestId")) != str(contest_id):
+                continue
+            if party.get("participantType") not in ("CONTESTANT", "OUT_OF_COMPETITION"):
+                continue
         # Keep Codeforces' ordering and tie decisions, but remove ranking gaps.
         upstream_rank = row["rank"]
         if upstream_rank != previous_rank:
@@ -143,6 +147,7 @@ def fetch_standings(config, query):
     value = query.get("contestId", query.get("contest", query.get("url", [config.get("codeforces_url") or config.get("contest_id", "")])))[0]
     default_group = "" if any(name in query for name in ("contestId", "contest", "url")) else config.get("group_code", "")
     group = query.get("groupCode", query.get("group", [default_group]))[0]
+    show_ghosts = query.get("ghosts", ["false"])[0] == "true"
     try:
         contest_id, group = contest_target(value, group)
     except ValueError as error:
@@ -152,7 +157,7 @@ def fetch_standings(config, query):
     if group and not (key and secret):
         return failure(503, "The server is not configured for pashka-bot. Set CODEFORCES_API_KEY and CODEFORCES_API_SECRET on Render.")
     fingerprint = hashlib.sha256(json.dumps([key, secret]).encode()).hexdigest()
-    cache_key = (contest_id, group, fingerprint)
+    cache_key = (contest_id, group, fingerprint, show_ghosts)
     if not _lock.acquire(blocking=False):
         return failure(429, "Codeforces API is busy. Please retry shortly.")
     try:
@@ -176,7 +181,7 @@ def fetch_standings(config, query):
                     params["groupCode"] = group
                 # Never enable asManager: respect the participant-visible scoreboard and freeze.
                 data = api_request(params, key, secret)
-            data = contest_standings(data, contest_id)
+            data = contest_standings(data, contest_id, show_ghosts)
             status = 200
         except APIError as error:
             status, data = failure(error.status, str(error))
