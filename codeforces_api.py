@@ -115,28 +115,95 @@ def api_request(params, key="", secret=""):
     return {"status": "OK", "result": {name: result[name] for name in ("contest", "problems", "rows")}}
 
 
+def ghost_replay_cutoff(contest):
+    if contest.get("phase") == "FINISHED" and not contest.get("frozen"):
+        return None
+    if contest.get("phase") == "BEFORE":
+        return -1
+    elapsed = contest.get("relativeTimeSeconds")
+    if elapsed is None:
+        start = contest.get("startTimeSeconds")
+        if start is None:
+            return -1
+        elapsed = int(time.time()) - start
+    duration = contest.get("durationSeconds")
+    if contest.get("frozen"):
+        freeze = contest.get("freezeDurationSeconds")
+        if duration is None or freeze is None or not 0 <= freeze <= duration:
+            # Without the freeze boundary, do not disclose future ghost solves.
+            return -1
+        return min(elapsed, duration - freeze - 1)
+    if duration is not None and elapsed >= duration:
+        return None
+    return elapsed
+
+
+def ghost_attempt_penalty(row):
+    base, attempts = 0, 0
+    for problem in row["problemResults"]:
+        if problem.get("points", 0) <= 0:
+            continue
+        if "penalty" in problem:
+            base += problem["penalty"]
+        else:
+            seconds = problem.get("bestSubmissionTimeSeconds")
+            if seconds is None or seconds < 0:
+                return 20
+            base += seconds // 60
+            attempts += problem.get("rejectedAttemptCount", 0)
+    extra = row.get("penalty", base) - base
+    # Preserve a nonstandard attempt penalty when the final totals identify it.
+    if attempts and extra >= 0 and extra % attempts == 0:
+        return extra // attempts
+    return 20
+
+
+def replay_ghost(row, cutoff):
+    attempt_penalty = ghost_attempt_penalty(row)
+    problems, points, penalty = [], 0, 0
+    for problem in row["problemResults"]:
+        seconds = problem.get("bestSubmissionTimeSeconds")
+        if problem.get("points", 0) > 0 and seconds is not None and 0 <= seconds <= cutoff:
+            problems.append(dict(problem))
+            points += problem["points"]
+            penalty += problem.get("penalty", seconds // 60 + attempt_penalty * problem.get("rejectedAttemptCount", 0))
+        else:
+            # Standings contain no timestamps for unsuccessful attempts.
+            problems.append({"points": 0, "rejectedAttemptCount": 0, "type": "FINAL"})
+    return {**row, "points": points, "penalty": penalty, "problemResults": problems}
+
+
 def contest_standings(data, contest_id, show_ghosts=False):
     result = data["result"]
     rows = []
-    previous_rank = None
-    rank = 0
+    cutoff = ghost_replay_cutoff(result["contest"]) if show_ghosts and result["contest"].get("type") == "ICPC" else None
+    replayed = False
     for row in result["rows"]:
         party = row.get("party", {})
         # Ghosts from the original contest are distinct from ordinary virtual users.
         if party.get("ghost") is True:
             if not show_ghosts:
                 continue
+            if cutoff is not None:
+                row = replay_ghost(row, cutoff)
+                replayed = True
         else:
             if str(party.get("contestId")) != str(contest_id):
                 continue
             if party.get("participantType") not in ("CONTESTANT", "OUT_OF_COMPETITION"):
                 continue
-        # Keep Codeforces' ordering and tie decisions, but remove ranking gaps.
-        upstream_rank = row["rank"]
-        if upstream_rank != previous_rank:
-            rank = len(rows) + 1
-        rows.append({**row, "rank": rank})
-        previous_rank = upstream_rank
+        rows.append(dict(row))
+    if replayed:
+        # Final upstream ranks cannot order a replay at an earlier contest time.
+        rows.sort(key=lambda row: (-row["points"], row["penalty"], row["party"].get("teamName", "").casefold()))
+    previous_rank = None
+    rank = 0
+    for index, row in enumerate(rows):
+        rank_key = (row["points"], row["penalty"]) if replayed else row["rank"]
+        if rank_key != previous_rank:
+            rank = index + 1
+        row["rank"] = rank
+        previous_rank = rank_key
     return {**data, "result": {**result, "rows": rows}}
 
 

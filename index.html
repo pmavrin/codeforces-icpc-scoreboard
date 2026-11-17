@@ -1483,7 +1483,7 @@
       }
 
       function standingsCacheKey() {
-        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}-ghosts-${state.showGhosts}-v3` : ''}`;
+        return `icpc-standings-${state.source}-${state.standingsUrl || 'configured'}${state.source === 'codeforces' ? `-group-${state.groupCode}-ghosts-${state.showGhosts}-replay-v4` : ''}`;
       }
 
       function cancelRequest() {

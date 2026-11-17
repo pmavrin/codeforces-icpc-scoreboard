@@ -17,7 +17,7 @@ assert(html.includes('pashka-bot'), 'Dedicated access account is visible');
 assert(html.includes('id="ghostsInput" type="checkbox"'), 'Ghost setting is a checkbox');
 const cacheState = { source: 'codeforces', standingsUrl: '729865', groupCode: 'qhHFL5aN06', showGhosts: false };
 const cacheKey = new Function('state', helper('standingsCacheKey') + '\nreturn standingsCacheKey;')(cacheState);
-assert(cacheKey().endsWith('-ghosts-false-v3'), 'Old Codeforces standings are not reused offline');
+assert(cacheKey().endsWith('-ghosts-false-replay-v4'), 'Old final ghost standings are not reused offline');
 const withoutGhostsKey = cacheKey();
 cacheState.showGhosts = true;
 assert(cacheKey() !== withoutGhostsKey, 'Ghost settings have separate offline caches');

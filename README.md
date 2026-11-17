@@ -70,6 +70,10 @@ Enable **Show original contest ghosts** in the Codeforces settings to include en
 
 With ghosts enabled, all matching rows are displayed across pages unless the link explicitly sets `count`. This prevents original-contest ghosts from pushing local teams beyond the normal 200-row display limit.
 
+During an ICPC contest, ghost results are replayed using the current contest's elapsed time, not the original team's start time. Only solutions with `bestSubmissionTimeSeconds` at or before that time are revealed; solved counts, penalties, ordering, and tied ranks are recalculated. Actual teams' scores are unchanged. A known freeze boundary limits the replay too; without that boundary (or without clock metadata), ghost solutions are withheld conservatively. After the contest ends and the standings are unfrozen, the original final results are used.
+
+The standings API does not supply timestamps for failed attempts. While replaying, a ghost's incorrect attempts are therefore shown only together with an already-revealed solution, not on unsolved problems. Per-problem penalties are used when available; otherwise the attempt penalty is inferred from the final totals, falling back to the standard 20 minutes when it cannot be inferred.
+
 Spectator ranklist URLs are no longer supported. Replace `CODEFORCES_STANDINGS_URL` with `CODEFORCES_CONTEST_URL` (or use `contest_id` and `group_code` in JSON). Legacy personal `api_key` / `api_secret` values in JSON are deliberately ignored, and old browser API credentials are removed on page load. Upstream errors are sanitized so signed URLs and credentials are not returned to viewers. API availability still depends on Codeforces; Cloudflare and rate-limit errors are reported without exposing credentials.
 
 ## HTML sources
