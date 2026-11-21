@@ -1,6 +1,6 @@
-# ICPC Scoreboard
+# Contest Scoreboard
 
-One TV scoreboard for Codeforces, OpenTrains / OpenCup, and DOMjudge.
+One TV scoreboard for Codeforces (ICPC and IOI), OpenTrains / OpenCup, and DOMjudge.
 
 ## Run locally
 
@@ -62,7 +62,17 @@ For contest organizers: add **pashka-bot** to your Codeforces group and grant it
 
 **Publishing boundary:** this service exposes standings accessible to the bot to anyone who supplies the contest ID and group code. Adding the bot is therefore permission to broadcast those standings, not a way to keep them private. Use a dedicated account only in groups intended for this scoreboard. The server never enables `asManager` or forwards arbitrary API methods or caller-supplied credentials.
 
-Regular public contests are requested anonymously with only `contestId`; Gym, mashup, and group contests use server-side authentication when required. Requests are limited to one every 2.1 seconds per server process, with a shared 15-second cache. Only ICPC scoring is supported. See the [Codeforces API documentation](https://codeforces.com/apiHelp/methods) for access rules.
+Regular public contests are requested anonymously with only `contestId`; Gym, mashup, and group contests use server-side authentication when required. Requests are limited to one every 2.1 seconds per server process, with a shared 15-second cache. ICPC and IOI scoring are supported, selected automatically from `contest.type`. See the [Codeforces API documentation](https://codeforces.com/apiHelp/methods) for access rules.
+
+### IOI scoring
+
+IOI contests use the same application, API proxy, server credentials, settings, pagination, and refresh loop. The table shows each participant's name and handle, total score and points per task, without an ICPC penalty column. Upstream ranks, tied places, total scores and fractional points are preserved. Any increase in a task's score is highlighted, including partial improvements; unchanged scores and decreases after rejudging are not highlighted.
+
+Full scores are green, partial scores amber, submitted zero scores red, and unattempted tasks have a dot. Preliminary results are labeled **Pending**. A task's maximum comes from `problem.points` when supplied by the source. Otherwise the **IOI default maximum points per task** setting is used (100 by default, shared as `ioiMaxPoints=100`). Observed top scores are never treated as proof of a task's maximum. This setting affects colors and labels, not scores or places.
+
+Example: `/?source=codeforces&url=https%3A%2F%2Fcodeforces.com%2Fgroup%2FCXR8LJCjyd%2Fcontest%2F656558&ioiMaxPoints=100`.
+
+IOI ghost replay during an ongoing contest is unavailable: final best scores cannot reconstruct earlier partial scores. Such ghosts are hidden until the contest is finished. The ICPC ghost replay described below is unchanged.
 
 For mirrors, Codeforces can include participants from the original Gym in the same API response. By default, the adapter keeps only non-ghost rows whose `party.contestId` matches the requested contest, excludes practice/virtual/manager entries, and renumbers the remaining contestants while preserving Codeforces' order and ties. Out-of-competition entries remain available. An empty mirror stays empty instead of showing the original Gym's teams.
 
@@ -129,6 +139,12 @@ override, remove its entry in **University names** and save.
 ## Add a source
 
 Providers are registered in `server.py` through `STANDINGS_SOURCES`. Each adapter supplies public defaults, URL-query settings, and a fetch function returning `(status, content_type, payload_bytes)`. Parsers return the common `contest`, `problems`, and `rows` shape. Add a matching option and label to the setup form for a new provider.
+
+## Shared frontend
+
+`index.html` contains the shared layout and styles. `static/scoreboard.js` owns settings, fetching, timers, pagination, identity, highlights and DOM rendering. `static/scoring.js` contains the ICPC/IOI presentation rules: summary columns, task-cell states, score formatting, improvement detection and score-group separators. The server serves only these two allowlisted scripts, never arbitrary repository files.
+
+To add another scoring system, register its presentation rules in `static/scoring.js`; do not duplicate the application or the provider adapters. Scoring is independent of the data source. Both modes accept the same `contest`, `problems`, and `rows` response structure.
 
 ## Tests
 

@@ -184,6 +184,9 @@ def contest_standings(data, contest_id, show_ghosts=False):
         if party.get("ghost") is True:
             if not show_ghosts:
                 continue
+            if result["contest"].get("type") == "IOI" and result["contest"].get("phase") != "FINISHED":
+                # Final best scores cannot reconstruct earlier IOI partial scores.
+                continue
             if cutoff is not None:
                 row = replay_ghost(row, cutoff)
                 replayed = True

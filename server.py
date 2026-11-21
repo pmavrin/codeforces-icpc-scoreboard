@@ -26,6 +26,10 @@ from public_http import read_public_html
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("SCOREBOARD_CONFIG", ROOT / "scoreboard.config.json"))
 INDEX_PATH = ROOT / "index.html"
+STATIC_FILES = {
+    "/static/scoring.js": ROOT / "static" / "scoring.js",
+    "/static/scoreboard.js": ROOT / "static" / "scoreboard.js",
+}
 ENV_CONFIG = {
     "codeforces_url": "CODEFORCES_CONTEST_URL",
     "contest_id": "CODEFORCES_CONTEST_ID",
@@ -476,6 +480,9 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         request = urllib.parse.urlparse(self.path)
+        if request.path in STATIC_FILES:
+            self.send_bytes(200, "text/javascript; charset=utf-8", STATIC_FILES[request.path].read_bytes(), "no-cache")
+            return
         if request.path == "/health":
             try:
                 load_config()

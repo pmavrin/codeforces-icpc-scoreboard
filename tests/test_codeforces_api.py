@@ -140,6 +140,20 @@ class CodeforcesAPITests(unittest.TestCase):
         upstream = {**DATA, 'result': {**DATA['result'], 'rows': rows}}
         self.assertEqual(api.contest_standings(upstream, '2045'), upstream)
 
+    def test_ioi_scores_names_and_upstream_ties_are_preserved(self):
+        rows = []
+        for name, rank, score in [('Alice', 1, 300), ('Bob', 1, 300), ('Carol', 3, 125.75)]:
+            rows.append({'rank': rank, 'points': score, 'penalty': 0, 'lastSubmissionTimeSeconds': 1200,
+                         'party': {'contestId': 656558, 'participantType': 'CONTESTANT',
+                                   'members': [{'handle': name.lower(), 'name': name}]},
+                         'problemResults': [{'points': score / 3, 'type': 'FINAL', 'rejectedAttemptCount': 0}]})
+        upstream = {'status': 'OK', 'result': {'contest': {'id': 656558, 'type': 'IOI', 'phase': 'CODING'},
+                                              'problems': [{'index': 'A', 'name': 'A + B'}], 'rows': rows}}
+        with patch.object(api, 'api_request', return_value=upstream):
+            status, result = api.fetch_standings(CONFIG, {'url': ['https://codeforces.com/group/CXR8LJCjyd/contest/656558']})
+        self.assertEqual(status, 200)
+        self.assertEqual(result, upstream)
+
     def test_missing_bot_key_and_old_personal_keys_are_not_used(self):
         with patch.object(api, 'api_request') as fetch:
             status, data = api.fetch_standings({'api_key': 'OLD_KEY', 'api_secret': 'OLD_SECRET'}, {'contestId': ['727989'], 'groupCode': ['ABC']})

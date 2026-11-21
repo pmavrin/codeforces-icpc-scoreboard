@@ -94,10 +94,12 @@ class GhostReplayTests(unittest.TestCase):
         del ghost['problemResults'][0]['bestSubmissionTimeSeconds']
         self.assertEqual(api.replay_ghost(ghost, 600)['points'], 0)
 
-    def test_replay_does_not_change_ghosts_off_or_other_scoring_types(self):
+    def test_replay_does_not_expose_final_ioi_ghost_scores_during_contest(self):
         data = standings([ghost_row()])
         self.assertEqual(api.contest_standings(data, '733439', False)['result']['rows'], [])
         data['result']['contest']['type'] = 'IOI'
+        self.assertEqual(api.contest_standings(data, '733439', True)['result']['rows'], [])
+        data['result']['contest']['phase'] = 'FINISHED'
         self.assertEqual(api.contest_standings(data, '733439', True), data)
 
     def test_fetch_replays_new_snapshot_after_cache_expires(self):

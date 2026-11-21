@@ -30,7 +30,7 @@ class HTTPRouteTests(unittest.TestCase):
         with patch.object(server, 'load_raw_config', return_value=CONFIG):
             status, _, page, _ = self.request('/?' + query)
             self.assertEqual(status, 200)
-            self.assertIn(b'Contest ID or URL', page)
+            self.assertIn(b'/static/scoreboard.js', page)
             self.assertIn(URL.encode(), page)
             self.assertNotIn(b'id="apiKeyInput"', page)
             self.assertNotIn(b'BOT_KEY', page)
@@ -46,6 +46,16 @@ class HTTPRouteTests(unittest.TestCase):
             status, _, body, _ = self.request('/api/standings?source=domjudge&url=https://judge.example/public')
         self.assertEqual(status, 200)
         self.assertEqual(len(json.loads(body)['result']['rows']), 2)
+
+    def test_static_scripts_are_served_but_other_files_are_not(self):
+        for path in ['/static/scoring.js?v=ioi-1', '/static/scoreboard.js?v=ioi-1']:
+            status, content_type, body, cache = self.request(path)
+            self.assertEqual(status, 200)
+            self.assertIn('javascript', content_type)
+            self.assertTrue(body)
+            self.assertEqual(cache, 'no-cache')
+        for path in ['/static/../server.py', '/static/scoreboard.config.json', '/static/unknown.js']:
+            self.assertEqual(self.request(path)[0], 404)
 
     def test_bot_setup_and_access_errors(self):
         with patch.object(server, 'load_raw_config', return_value={}):

@@ -1,7 +1,8 @@
 // Run with JavaScriptCore (jsc) from the repository root. These are not browser layout tests.
 const html = readFile('index.html');
-const script = html.match(/<script>\s*\(\(\) => \{[\s\S]*?<\/script>/)[0]
-  .replace(/^<script>/, '').replace(/<\/script>$/, '');
+const script = readFile('static/scoreboard.js');
+const scoringScript = readFile('static/scoring.js');
+const ScoreboardScoring = new Function(scoringScript + '\nreturn ScoreboardScoring;')();
 new Function(script);
 function assert(value, message) { if (!value) throw new Error(message); }
 function helper(name) {
@@ -10,7 +11,36 @@ function helper(name) {
   const end = script.indexOf('\n      function ', start + 1);
   return script.slice(start, end < 0 ? undefined : end);
 }
+const icpc = ScoreboardScoring.forContest({ type: 'ICPC' });
+const ioi = ScoreboardScoring.forContest({ type: 'IOI' });
+assert(ioi.columns.length === 1 && ioi.columns[0].label === 'Score', 'IOI has total score, no penalty');
+assert(icpc.columns.length === 2 && icpc.columns[1].field === 'penalty', 'ICPC keeps its penalty column');
+assert(ioi.columns[0].format(125.75) === '125.75', 'Fractional totals are preserved');
+assert(ioi.problem({ points: 40 }, { points: 100 }).status === 'partial', 'Partial IOI score');
+assert(ioi.problem({ points: 100 }, {}).status === 'solved', 'Default IOI maximum is 100');
+assert(ioi.problem({ points: 100 }, {}, 200).status === 'partial', 'Configurable missing maximum');
+assert(ioi.problem({ points: 50 }, { points: 50 }, 200).status === 'solved', 'API maximum takes precedence');
+assert(ioi.problem({ points: 12.5 }, {}).text === '12.5', 'Fractional problem score');
+assert(ioi.problem({ points: 0, rejectedAttemptCount: 2 }, {}).text === '0', 'IOI rejected attempts are shown as zero points');
+assert(ioi.problem({ points: 0 }, {}).status === 'empty', 'Unattempted IOI task');
+assert(ioi.problem({ points: 0, bestSubmissionTimeSeconds: 0 }, {}).text === '0', 'Zero score on a submitted solution');
+assert(ioi.problem({ points: 0, rejectedAttemptCount: 2, frozen: true }, {}).text === '?', 'Pending score is not shown as zero');
+assert(ioi.problem({ points: 30, frozen: true }, {}).detail === '?', 'Known partial points remain visible with pending submissions');
+assert(ioi.problem({ points: 30, type: 'PRELIMINARY' }, {}).preliminary, 'Preliminary IOI scores are marked');
+assert(ioi.improved({ points: 40 }, { points: 70 }), 'Partial score improvements are highlighted');
+assert(!ioi.improved({ points: 70 }, { points: 40 }) && !ioi.improved({ points: 70 }, { points: 70 }), 'Rejudges down and unchanged scores are not improvements');
+assert(!icpc.improved({ points: 1 }, { points: 2 }), 'Existing ICPC solves are not highlighted again');
+assert(icpc.problem({ points: 1, rejectedAttemptCount: 2, bestSubmissionTimeSeconds: 120 }).text === '+2', 'ICPC notation is unchanged');
+assert(icpc.problem({ points: 0, rejectedAttemptCount: 2 }).text === '\u22122', 'ICPC failures unchanged');
+assert(icpc.problem({ points: 1, firstToSolve: true }).first, 'ICPC first-to-solve retained');
+assert(!ioi.problem({ points: 50, firstToSolve: true }, {}).first, 'IOI partial scores are not first-to-solve');
+assert(ScoreboardScoring.forContest().id === 'ICPC', 'Default mode remains ICPC');
+let unsupported = false;
+try { ScoreboardScoring.forContest({ type: 'CF' }); } catch (_) { unsupported = true; }
+assert(unsupported, 'Unsupported CF scoring is not silently interpreted as ICPC');
 assert(!html.includes('codeforces.com/api/'), 'No direct Codeforces API calls');
+assert(!script.includes('codeforces.com/api/'), 'Shared app uses the server proxy');
+assert(html.includes('/static/scoring.js') && html.includes('/static/scoreboard.js'), 'Both modes share one app');
 assert(!html.includes('id="apiKeyInput"'), 'No API key form');
 assert(!html.includes('crypto.subtle'), 'No browser-side signing');
 assert(html.includes('pashka-bot'), 'Dedicated access account is visible');
